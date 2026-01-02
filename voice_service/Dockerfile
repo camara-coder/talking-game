@@ -41,23 +41,29 @@ EXPOSE 8008 11434
 RUN echo '#!/bin/bash\n\
 set -e\n\
 \n\
+echo "=== Starting Voice Service ==="\n\
+\n\
+# Start Ollama in background\n\
 echo "Starting Ollama service..."\n\
-ollama serve &\n\
+ollama serve > /tmp/ollama.log 2>&1 &\n\
 OLLAMA_PID=$!\n\
 \n\
+# Wait for Ollama to be ready\n\
 echo "Waiting for Ollama to be ready..."\n\
 sleep 5\n\
 \n\
-echo "Pulling Ollama model..."\n\
-ollama pull qwen2.5:0.5b-instruct || echo "Model pull failed, will retry on first request"\n\
+# Pull model in background (dont block server startup)\n\
+echo "Downloading Ollama model in background..."\n\
+(ollama pull qwen2.5:0.5b-instruct && echo "Model download complete") > /tmp/model-download.log 2>&1 &\n\
 \n\
+# Start FastAPI server immediately\n\
 echo "Starting FastAPI server..."\n\
 exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8008}\n\
 ' > /app/start.sh && chmod +x /app/start.sh
 
 # Health check
-# Allow 5 minutes for Ollama model download + startup
-HEALTHCHECK --interval=30s --timeout=10s --start-period=300s --retries=3 \
+# Server starts quickly now, model downloads in background
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:${PORT:-8008}/health || exit 1
 
 # Run startup script
