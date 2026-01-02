@@ -31,10 +31,10 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# Add CORS middleware for Unity client
+# Add CORS middleware for web client
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

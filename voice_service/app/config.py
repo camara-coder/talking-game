@@ -102,18 +102,29 @@ class Settings(BaseSettings):
     LOG_FORMAT: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
     # CORS Configuration (for Web Frontend)
-    CORS_ORIGINS: list = [
-        "http://localhost",
-        "http://127.0.0.1",
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:5174",
-        "http://127.0.0.1:5174",
-        "http://localhost:5175",
-        "http://127.0.0.1:5175",
-        "http://localhost:*",
-        "http://127.0.0.1:*"
-    ]
+    # Can be overridden via CORS_ORIGINS environment variable (comma-separated)
+    CORS_ORIGINS: str = ""  # Will be parsed below
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        """Parse CORS origins from environment or use defaults"""
+        if self.CORS_ORIGINS:
+            # Parse from environment variable (comma-separated)
+            return [origin.strip() for origin in self.CORS_ORIGINS.split(",")]
+        else:
+            # Default origins for local development
+            return [
+                "http://localhost",
+                "http://127.0.0.1",
+                "http://localhost:5173",
+                "http://127.0.0.1:5173",
+                "http://localhost:5174",
+                "http://127.0.0.1:5174",
+                "http://localhost:5175",
+                "http://127.0.0.1:5175",
+                "http://localhost:*",
+                "http://127.0.0.1:*"
+            ]
 
     class Config:
         env_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
