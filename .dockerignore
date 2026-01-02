@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+unity_archived/
+web-client/node_modules/
+web-client/dist/
+.claude/
+*.log
+
+# Git
+.git/
+.gitignore
+
+# Data (we'll create fresh on deploy)
+voice_service/data/audio/*
+voice_service/data/logs/*
+
+# Documentation
+*.md
+!README.md

@@ -1,0 +1,250 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  font-family: 'Comic Sans MS', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.app-header {
+  background-color: rgba(255, 255, 255, 0.95);
+  padding: 1.5rem 2rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.app-header h1 {
+  color: #667eea;
+  font-size: 2rem;
+  font-weight: bold;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background-color: rgba(0, 0, 0, 0.05);
+  border-radius: 20px;
+}
+
+.status-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+.status-dot.connected {
+  background-color: #44ff44;
+}
+
+.status-dot.disconnected {
+  background-color: #ff4444;
+}
+
+.status-text {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #333;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.app-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2rem;
+}
+
+.error-banner {
+  background-color: #ff4444;
+  color: white;
+  padding: 1rem 2rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  font-weight: bold;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+}
+
+.game-container {
+  background-color: rgba(255, 255, 255, 0.95);
+  border-radius: 20px;
+  padding: 2rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  max-width: 700px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.character-canvas {
+  border-radius: 12px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.caption-display {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-height: 120px;
+}
+
+.transcript-box,
+.reply-box {
+  padding: 1rem;
+  border-radius: 12px;
+  animation: fadeIn 0.3s ease-in;
+}
+
+.transcript-box {
+  background-color: #e3f2fd;
+  border-left: 4px solid #2196f3;
+}
+
+.reply-box {
+  background-color: #f3e5f5;
+  border-left: 4px solid #9c27b0;
+}
+
+.caption-label {
+  font-size: 0.85rem;
+  font-weight: bold;
+  color: #666;
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+}
+
+.caption-text {
+  font-size: 1.2rem;
+  color: #333;
+  line-height: 1.5;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.controls {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  padding: 1rem 0;
+}
+
+.push-to-talk-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 2rem 3rem;
+  border: none;
+  border-radius: 50%;
+  font-size: 1.2rem;
+  font-weight: bold;
+  color: white;
+  transition: all 0.2s ease;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  min-width: 180px;
+  min-height: 180px;
+  cursor: pointer;
+}
+
+.push-to-talk-button:hover:not(:disabled) {
+  transform: scale(1.05);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
+}
+
+.push-to-talk-button:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.button-icon {
+  font-size: 3rem;
+}
+
+.button-text {
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.instructions {
+  text-align: center;
+  color: #666;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  padding: 1rem;
+  background-color: rgba(0, 0, 0, 0.02);
+  border-radius: 8px;
+}
+
+.instructions p {
+  margin: 0.5rem 0;
+}
+
+.app-footer {
+  background-color: rgba(0, 0, 0, 0.3);
+  color: white;
+  text-align: center;
+  padding: 1rem;
+  font-size: 0.9rem;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .app-header {
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .app-header h1 {
+    font-size: 1.5rem;
+  }
+
+  .game-container {
+    padding: 1rem;
+  }
+
+  .character-canvas {
+    max-width: 100%;
+    height: auto;
+  }
+
+  .push-to-talk-button {
+    min-width: 140px;
+    min-height: 140px;
+    padding: 1.5rem 2rem;
+  }
+
+  .button-icon {
+    font-size: 2rem;
+  }
+}

@@ -1,0 +1,41 @@
+# Core Framework
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+pydantic>=2.10.0
+pydantic-settings>=2.0.0
+python-multipart>=0.0.9
+websockets>=14.1
+
+# Audio Processing
+sounddevice>=0.5.1
+soundfile>=0.12.1
+numpy>=1.26.0
+scipy>=1.14.0
+webrtcvad>=2.0.10
+# Note: Audio conversion uses ffmpeg directly (no Python package needed)
+
+# Speech-to-Text
+# faster-whisper>=1.1.0  # Local STT (replaced by ElevenLabs Scribe)
+# openai>=2.0.0  # OpenAI Whisper API (replaced by ElevenLabs Scribe)
+# Now using ElevenLabs Scribe API (already installed via elevenlabs package)
+
+# LLM Client
+requests>=2.32.0
+httpx>=0.28.0
+
+# TTS - ElevenLabs (cloud-based high-quality neural TTS)
+elevenlabs>=1.0.0
+
+# TTS - Alternative options (commented out)
+# kokoro-onnx>=0.4.9  # Kokoro TTS with ONNX runtime (local, CPU-intensive)
+# pyttsx3>=2.90  # Windows TTS (for local dev)
+# edge-tts>=6.1.9  # Microsoft Edge TTS (for cloud deployment)
+# comtypes>=1.4.0  # Required for pyttsx3 on Windows
+
+# Utilities
+python-dotenv>=1.0.0
+aiofiles>=24.1.0
+
+# Testing
+pytest>=8.3.0
+pytest-asyncio>=0.24.0

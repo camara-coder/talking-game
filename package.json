@@ -1,0 +1,41 @@
+{
+  "name": "voice-game",
+  "version": "1.0.0",
+  "description": "Voice Conversational Kids Game - Testing Suite",
+  "private": true,
+  "scripts": {
+    "test": "npm run test:backend && npm run test:frontend",
+    "test:backend": "cd voice_service && python -m pytest",
+    "test:backend:unit": "cd voice_service && python -m pytest tests/unit -v",
+    "test:backend:integration": "cd voice_service && python -m pytest tests/integration -v",
+    "test:backend:coverage": "cd voice_service && python -m pytest --cov=app --cov-report=html --cov-report=term-missing",
+    "test:frontend": "cd web-client && npm test -- --watchAll=false",
+    "test:frontend:watch": "cd web-client && npm test",
+    "test:frontend:coverage": "cd web-client && npm test -- --coverage --watchAll=false",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:headed": "playwright test --headed",
+    "test:all": "npm run test:backend && npm run test:frontend && npm run test:e2e",
+    "lint": "npm run lint:backend && npm run lint:frontend",
+    "lint:backend": "cd voice_service && flake8 app tests --max-line-length=100 --ignore=E203,W503 || true",
+    "lint:frontend": "cd web-client && npm run lint",
+    "format": "npm run format:backend && npm run format:frontend",
+    "format:backend": "cd voice_service && black app tests && isort app tests",
+    "format:frontend": "cd web-client && npx prettier --write 'src/**/*.{ts,tsx,js,jsx,json,css}'",
+    "install:all": "npm install && cd web-client && npm install",
+    "dev:frontend": "cd web-client && npm run dev",
+    "dev:backend": "cd voice_service && python -m uvicorn app.main:app --host 127.0.0.1 --port 8008 --reload"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.2"
+  },
+  "keywords": [
+    "voice",
+    "game",
+    "kids",
+    "ai",
+    "testing"
+  ],
+  "author": "",
+  "license": "MIT"
+}

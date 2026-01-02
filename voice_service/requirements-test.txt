@@ -1,0 +1,23 @@
+# Testing dependencies for Voice Service
+# Install with: pip install -r requirements-test.txt
+
+# Main requirements
+-r requirements.txt
+
+# Testing frameworks
+pytest>=8.3.0
+pytest-asyncio>=0.24.0
+pytest-cov>=6.0.0
+pytest-timeout>=2.3.0
+pytest-mock>=3.14.0
+
+# Code quality
+flake8>=7.1.0
+black>=24.0.0
+isort>=5.13.0
+mypy>=1.11.0
+
+# Additional testing utilities
+httpx>=0.28.0  # For async HTTP testing
+faker>=34.0.0  # For generating test data
+freezegun>=1.5.0  # For mocking datetime

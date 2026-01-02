@@ -1,0 +1,50 @@
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv
+venv/
+ENV/
+env/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Data and logs (will be created in container)
+data/
+*.log
+
+# Git
+.git
+.gitignore
+
+# Documentation
+*.md
+README.md
+docs/
+
+# Environment files (will be set via Railway)
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.bak
+temp/
+tmp/
