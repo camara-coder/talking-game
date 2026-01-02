@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     build-essential \
     python3-dev \
+    portaudio19-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Ollama
