@@ -122,14 +122,21 @@ async def health_check():
         }
         health_status["service"] = "degraded"
 
-    # Check STT model availability
+    # Check STT (ElevenLabs Scribe API) availability
     try:
-        from faster_whisper import WhisperModel
-        # Just verify we can import - actual model loading happens on first use
-        health_status["checks"]["stt"] = {
-            "status": "ready",
-            "model": settings.STT_MODEL_SIZE
-        }
+        # Verify ElevenLabs API key is configured
+        if settings.ELEVENLABS_API_KEY:
+            health_status["checks"]["stt"] = {
+                "status": "ready",
+                "provider": "ElevenLabs Scribe",
+                "model": settings.ELEVENLABS_STT_MODEL
+            }
+        else:
+            health_status["checks"]["stt"] = {
+                "status": "unhealthy",
+                "error": "ELEVENLABS_API_KEY not configured"
+            }
+            health_status["service"] = "degraded"
     except Exception as e:
         health_status["checks"]["stt"] = {
             "status": "unhealthy",
