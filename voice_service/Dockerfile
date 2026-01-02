@@ -12,6 +12,8 @@ RUN apt-get update && apt-get install -y \
     curl \
     ffmpeg \
     ca-certificates \
+    build-essential \
+    python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Ollama
