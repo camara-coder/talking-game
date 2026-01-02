@@ -56,7 +56,8 @@ exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8008}\n\
 ' > /app/start.sh && chmod +x /app/start.sh
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+# Allow 5 minutes for Ollama model download + startup
+HEALTHCHECK --interval=30s --timeout=10s --start-period=300s --retries=3 \
     CMD curl -f http://localhost:${PORT:-8008}/health || exit 1
 
 # Run startup script
