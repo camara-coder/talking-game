@@ -1,5 +1,8 @@
 #!/bin/bash
-set -e
+set -ex  # -e: exit on error, -x: print commands as they execute
+
+# Create a marker file to prove this script is running
+touch /tmp/startup-script-executed
 
 echo "=== Starting Voice Service ==="
 
