@@ -16,11 +16,8 @@ RUN apt-get update && apt-get install -y \
     python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Ollama manually (download binary directly)
-RUN curl -fsSL https://ollama.com/download/ollama-linux-amd64.tgz -o ollama.tgz && \
-    tar -xzf ollama.tgz -C /usr/local/bin && \
-    rm ollama.tgz && \
-    chmod +x /usr/local/bin/ollama
+# Install Ollama
+RUN curl -fsSL https://ollama.com/install.sh | sh
 
 # Set working directory
 WORKDIR /app
@@ -50,5 +47,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:${PORT:-8008}/health || exit 1
 
 # Run startup script
-# Using shell form to ensure proper execution
-CMD /app/start.sh
+# Using ENTRYPOINT instead of CMD (harder to override)
+ENTRYPOINT ["/bin/bash", "/app/start.sh"]
