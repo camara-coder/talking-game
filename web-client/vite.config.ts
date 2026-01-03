@@ -10,11 +10,16 @@ export default defineConfig({
       '/api': {
         target: 'http://127.0.0.1:8008',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, '')
+        // Don't rewrite - backend expects /api prefix
       },
       '/ws': {
         target: 'ws://127.0.0.1:8008',
-        ws: true
+        ws: true,
+        changeOrigin: true,
+      },
+      '/health': {
+        target: 'http://127.0.0.1:8008',
+        changeOrigin: true,
       }
     }
   }

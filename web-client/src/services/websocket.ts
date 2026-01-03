@@ -38,8 +38,22 @@ export class VoiceWebSocketClient {
   private reconnectDelay = 2000;
   private eventHandlers: Map<string, EventCallback[]> = new Map();
   private connectionPromise: Promise<void> | null = null;
+  private baseUrl: string;
 
-  constructor(private baseUrl: string = import.meta.env.VITE_WS_BASE_URL || 'ws://127.0.0.1:8008') {}
+  constructor(baseUrl?: string) {
+    // In production, use the full URL from environment variable
+    // In development, use relative URL for Vite proxy
+    if (baseUrl) {
+      this.baseUrl = baseUrl;
+    } else if (import.meta.env.VITE_WS_BASE_URL) {
+      this.baseUrl = import.meta.env.VITE_WS_BASE_URL;
+    } else {
+      // Development mode: construct WebSocket URL from current location
+      // Vite proxy will handle /ws requests
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      this.baseUrl = `${protocol}//${window.location.host}`;
+    }
+  }
 
   async connect(sessionId: string): Promise<void> {
     // If already connecting, return existing promise
