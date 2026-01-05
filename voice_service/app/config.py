@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     SERVICE_HOST: str = "127.0.0.1"
     SERVICE_PORT: int = 8008
     SERVICE_NAME: str = "Voice Agent Service"
+    # Public URL for production (set via environment variable)
+    # Example: https://your-app.up.railway.app
+    PUBLIC_URL: str = ""  # If empty, uses http://SERVICE_HOST:SERVICE_PORT
 
     # Ollama Configuration
     OLLAMA_BASE_URL: str = "http://127.0.0.1:11434"

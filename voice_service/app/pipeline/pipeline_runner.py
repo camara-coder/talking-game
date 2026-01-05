@@ -145,7 +145,9 @@ class PipelineRunner:
                 duration_ms = int(duration_sec * 1000)
 
                 # Broadcast audio ready
-                audio_url = f"http://{settings.SERVICE_HOST}:{settings.SERVICE_PORT}/api/audio/{session_id}/{turn_id}.wav"
+                # Use PUBLIC_URL if set (for production), otherwise use local URL
+                base_url = settings.PUBLIC_URL if settings.PUBLIC_URL else f"http://{settings.SERVICE_HOST}:{settings.SERVICE_PORT}"
+                audio_url = f"{base_url}/api/audio/{session_id}/{turn_id}.wav"
 
                 await connection_manager.broadcast_audio_ready(
                     session_id,
