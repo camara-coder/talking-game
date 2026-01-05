@@ -267,10 +267,15 @@ async def process_audio_stream(session_id: str, audio_data: bytes):
     logger.info(f"Processing audio stream for session {session_id}: {len(audio_data)} bytes")
 
     try:
+        # Log audio data size
+        logger.info(f"Received audio data: {len(audio_data)} bytes")
+
         # Write raw audio to temp file
         with tempfile.NamedTemporaryFile(suffix='.webm', delete=False) as temp_webm:
             temp_webm.write(audio_data)
             temp_webm_path = temp_webm.name
+
+        logger.info(f"Wrote WebM file: {temp_webm_path} ({len(audio_data)} bytes)")
 
         # Create temp WAV file path
         temp_wav = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
