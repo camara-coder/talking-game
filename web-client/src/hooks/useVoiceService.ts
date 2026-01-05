@@ -145,6 +145,9 @@ export function useVoiceService(): UseVoiceServiceResult {
       setTranscript('');
       setReplyText('');
 
+      // Unlock audio context for mobile browsers (must be in user gesture handler)
+      await audioPlayerRef.current.unlock();
+
       // Create session
       const response = await apiRef.current.startSession();
       const newSessionId = response.session_id;
@@ -162,13 +165,13 @@ export function useVoiceService(): UseVoiceServiceResult {
       await ws.sendAudioStart({
         sample_rate: 16000,
         channels: 1,
-        format: 'webm',
+        format: 'pcm16', // Changed from 'webm' to 'pcm16' for AudioWorklet
       });
 
       // Setup microphone to stream audio chunks
       const microphone = microphoneRef.current;
 
-      microphone.onChunk(async (chunk: Blob) => {
+      microphone.onChunk(async (chunk: ArrayBuffer) => {
         try {
           await ws.sendAudioChunk(chunk);
         } catch (err) {

@@ -1,28 +1,48 @@
 export class AudioPlayer {
-  private audioContext: AudioContext;
+  private audioContext: AudioContext | null = null;
   private currentSource: AudioBufferSourceNode | null = null;
   private onPlaybackCompleteCallback?: () => void;
 
   constructor() {
-    this.audioContext = new AudioContext();
+    // Don't create AudioContext here - will be created on first user interaction
+    // This is important for mobile browsers
   }
 
   private ensureAudioContext(): void {
-    // Recreate AudioContext if it's closed
-    if (this.audioContext.state === 'closed') {
-      console.log('  AudioContext was closed, creating new one...');
+    // Create AudioContext if it doesn't exist
+    if (!this.audioContext || this.audioContext.state === 'closed') {
+      console.log('  Creating AudioContext...');
       this.audioContext = new AudioContext();
-      console.log('  New AudioContext created, state:', this.audioContext.state);
+      console.log('  AudioContext created, state:', this.audioContext.state);
+    }
+  }
+
+  /**
+   * Unlock audio on mobile browsers
+   * Call this in response to user interaction (e.g., button press)
+   */
+  async unlock(): Promise<void> {
+    this.ensureAudioContext();
+
+    if (this.audioContext && this.audioContext.state === 'suspended') {
+      console.log('🔓 Unlocking AudioContext for mobile...');
+      await this.audioContext.resume();
+      console.log('✅ AudioContext unlocked, state:', this.audioContext.state);
     }
   }
 
   async playAudio(audioData: ArrayBuffer): Promise<void> {
     console.log('🔊 AudioPlayer.playAudio called');
     console.log('  Audio data size:', audioData.byteLength, 'bytes');
-    console.log('  AudioContext state:', this.audioContext.state);
 
     // Ensure we have a valid AudioContext
     this.ensureAudioContext();
+
+    if (!this.audioContext) {
+      throw new Error('Failed to create AudioContext');
+    }
+
+    console.log('  AudioContext state:', this.audioContext.state);
 
     // Stop any currently playing audio
     this.stop();
@@ -94,7 +114,7 @@ export class AudioPlayer {
 
   destroy(): void {
     this.stop();
-    if (this.audioContext.state !== 'closed') {
+    if (this.audioContext && this.audioContext.state !== 'closed') {
       this.audioContext.close().catch((error) => {
         console.error('Error closing audio context:', error);
       });
