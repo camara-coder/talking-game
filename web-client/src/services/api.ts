@@ -6,7 +6,20 @@ import type {
 } from '../types';
 
 export class VoiceServiceAPI {
-  constructor(private baseUrl: string = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8008') {}
+  private baseUrl: string;
+
+  constructor(baseUrl?: string) {
+    // In production, use the full URL from environment variable
+    // In development, use empty string to leverage Vite's proxy (relative paths)
+    if (baseUrl) {
+      this.baseUrl = baseUrl;
+    } else if (import.meta.env.VITE_API_BASE_URL) {
+      this.baseUrl = import.meta.env.VITE_API_BASE_URL;
+    } else {
+      // Development mode: use relative paths for Vite proxy
+      this.baseUrl = '';
+    }
+  }
 
   async startSession(request: SessionStartRequest = {}): Promise<SessionStartResponse> {
     const response = await fetch(`${this.baseUrl}/api/session/start`, {
