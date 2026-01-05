@@ -139,12 +139,20 @@ export class VoiceWebSocketClient {
 
   /**
    * Send audio chunk to backend
+   * Accepts both Blob (from MediaRecorder) and ArrayBuffer (from AudioWorklet)
    */
-  async sendAudioChunk(audioData: Blob): Promise<void> {
+  async sendAudioChunk(audioData: Blob | ArrayBuffer): Promise<void> {
     await this.ensureConnected();
 
-    // Convert Blob to ArrayBuffer
-    const arrayBuffer = await audioData.arrayBuffer();
+    // Convert to ArrayBuffer if needed
+    let arrayBuffer: ArrayBuffer;
+    if (audioData instanceof ArrayBuffer) {
+      // Already an ArrayBuffer (from AudioWorklet)
+      arrayBuffer = audioData;
+    } else {
+      // Blob (from MediaRecorder) - convert to ArrayBuffer
+      arrayBuffer = await audioData.arrayBuffer();
+    }
 
     // For binary data, we send it directly
     // The backend should handle binary frames
