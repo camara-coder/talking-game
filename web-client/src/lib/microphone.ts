@@ -1,23 +1,26 @@
 /**
- * Browser Microphone Capture using MediaRecorder API
- * Captures audio from the user's microphone and provides chunks for streaming
+ * Browser Microphone Capture using Web Audio API + AudioWorklet
+ * Captures RAW PCM audio from the user's microphone for streaming
+ * This avoids MediaRecorder's WebM chunk concatenation issues
  */
 
-export type AudioChunkCallback = (chunk: Blob) => void;
+export type AudioChunkCallback = (chunk: ArrayBuffer) => void;
 export type ErrorCallback = (error: Error) => void;
 
 export interface MicrophoneOptions {
   /** Audio sample rate (default: 16000 for STT) */
   sampleRate?: number;
-  /** Audio chunk duration in milliseconds (default: 100ms) */
+  /** Audio chunk duration in milliseconds (not used with AudioWorklet) */
   chunkDuration?: number;
-  /** MIME type for audio recording */
+  /** MIME type (not used with raw PCM) */
   mimeType?: string;
 }
 
 export class MicrophoneCapture {
-  private mediaRecorder: MediaRecorder | null = null;
+  private audioContext: AudioContext | null = null;
+  private audioWorkletNode: AudioWorkletNode | null = null;
   private audioStream: MediaStream | null = null;
+  private sourceNode: MediaStreamAudioSourceNode | null = null;
   private isRecording = false;
 
   private onChunkCallback: AudioChunkCallback | null = null;
@@ -29,12 +32,12 @@ export class MicrophoneCapture {
     this.options = {
       sampleRate: options.sampleRate ?? 16000,
       chunkDuration: options.chunkDuration ?? 100,
-      mimeType: options.mimeType ?? this.getSupportedMimeType(),
+      mimeType: options.mimeType ?? '',
     };
   }
 
   /**
-   * Request microphone permission and initialize audio stream
+   * Request microphone permission and initialize audio stream + AudioContext
    */
   async initialize(): Promise<void> {
     try {
@@ -49,27 +52,37 @@ export class MicrophoneCapture {
         },
       });
 
+      // Create AudioContext with desired sample rate
+      this.audioContext = new AudioContext({
+        sampleRate: this.options.sampleRate,
+      });
+
       console.log('Microphone access granted');
       console.log('Audio constraints:', {
-        sampleRate: this.options.sampleRate,
-        mimeType: this.options.mimeType,
+        sampleRate: this.audioContext.sampleRate,
+        format: 'PCM16',
       });
+
+      // Load AudioWorklet module
+      await this.audioContext.audioWorklet.addModule('/pcm-processor.js');
+      console.log('AudioWorklet processor loaded');
+
     } catch (error) {
       const err = error as Error;
-      console.error('Failed to access microphone:', err);
+      console.error('Failed to initialize audio:', err);
 
       if (err.name === 'NotAllowedError') {
         throw new Error('Microphone permission denied. Please allow microphone access.');
       } else if (err.name === 'NotFoundError') {
         throw new Error('No microphone found. Please connect a microphone.');
       } else {
-        throw new Error(`Failed to access microphone: ${err.message}`);
+        throw new Error(`Failed to initialize audio: ${err.message}`);
       }
     }
   }
 
   /**
-   * Start recording audio
+   * Start recording audio using AudioWorklet
    */
   async startRecording(): Promise<void> {
     if (this.isRecording) {
@@ -77,44 +90,52 @@ export class MicrophoneCapture {
       return;
     }
 
-    if (!this.audioStream) {
+    if (!this.audioStream || !this.audioContext) {
       await this.initialize();
     }
 
-    if (!this.audioStream) {
-      throw new Error('Audio stream not initialized');
+    if (!this.audioStream || !this.audioContext) {
+      throw new Error('Audio not initialized');
     }
 
     try {
-      // Create MediaRecorder
-      this.mediaRecorder = new MediaRecorder(this.audioStream, {
-        mimeType: this.options.mimeType,
-      });
+      // Create source node from microphone stream
+      this.sourceNode = this.audioContext.createMediaStreamSource(this.audioStream);
 
-      // Handle audio data chunks
-      this.mediaRecorder.ondataavailable = (event: BlobEvent) => {
-        if (event.data.size > 0) {
-          console.log(`Audio chunk received: ${event.data.size} bytes`);
+      // Create AudioWorklet node
+      this.audioWorkletNode = new AudioWorkletNode(
+        this.audioContext,
+        'pcm-processor'
+      );
+
+      // Handle PCM data from AudioWorklet
+      this.audioWorkletNode.port.onmessage = (event) => {
+        if (event.data.type === 'audio') {
+          const pcmData = event.data.data as ArrayBuffer;
+          console.log(`PCM chunk received: ${pcmData.byteLength} bytes`);
+
           if (this.onChunkCallback) {
-            this.onChunkCallback(event.data);
+            this.onChunkCallback(pcmData);
           }
         }
       };
 
       // Handle errors
-      this.mediaRecorder.onerror = (event: Event) => {
-        const error = new Error(`MediaRecorder error: ${(event as any).error}`);
+      this.audioWorkletNode.port.onmessageerror = (event) => {
+        const error = new Error(`AudioWorklet error: ${event}`);
         console.error(error);
         if (this.onErrorCallback) {
           this.onErrorCallback(error);
         }
       };
 
-      // Start recording with time slices
-      this.mediaRecorder.start(this.options.chunkDuration);
-      this.isRecording = true;
+      // Connect: microphone -> AudioWorklet -> (destination not needed, we just capture)
+      this.sourceNode.connect(this.audioWorkletNode);
+      // Note: We don't connect to audioContext.destination to avoid feedback
 
-      console.log('Recording started');
+      this.isRecording = true;
+      console.log('Recording started (PCM mode)');
+
     } catch (error) {
       const err = error as Error;
       console.error('Failed to start recording:', err);
@@ -126,47 +147,54 @@ export class MicrophoneCapture {
    * Stop recording audio
    */
   async stopRecording(): Promise<void> {
-    if (!this.isRecording || !this.mediaRecorder) {
+    if (!this.isRecording) {
       console.warn('Not currently recording');
       return;
     }
 
-    return new Promise((resolve) => {
-      if (!this.mediaRecorder) {
-        resolve();
-        return;
+    try {
+      // Disconnect audio nodes
+      if (this.sourceNode && this.audioWorkletNode) {
+        this.sourceNode.disconnect(this.audioWorkletNode);
       }
 
-      this.mediaRecorder.onstop = () => {
-        console.log('Recording stopped');
-        this.isRecording = false;
-        resolve();
-      };
+      // Cleanup
+      this.audioWorkletNode = null;
+      this.sourceNode = null;
+      this.isRecording = false;
 
-      // Stop the recorder
-      if (this.mediaRecorder.state !== 'inactive') {
-        this.mediaRecorder.stop();
-      } else {
-        this.isRecording = false;
-        resolve();
-      }
-    });
+      console.log('Recording stopped');
+    } catch (error) {
+      const err = error as Error;
+      console.error('Error stopping recording:', err);
+      this.isRecording = false;
+    }
   }
 
   /**
    * Release microphone resources
    */
   destroy(): void {
-    if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
-      this.mediaRecorder.stop();
+    // Disconnect audio nodes
+    if (this.sourceNode && this.audioWorkletNode) {
+      this.sourceNode.disconnect(this.audioWorkletNode);
     }
 
+    // Stop microphone stream
     if (this.audioStream) {
       this.audioStream.getTracks().forEach((track) => track.stop());
       this.audioStream = null;
     }
 
-    this.mediaRecorder = null;
+    // Close AudioContext
+    if (this.audioContext && this.audioContext.state !== 'closed') {
+      this.audioContext.close();
+    }
+
+    // Cleanup
+    this.audioContext = null;
+    this.audioWorkletNode = null;
+    this.sourceNode = null;
     this.isRecording = false;
     this.onChunkCallback = null;
     this.onErrorCallback = null;
@@ -186,29 +214,6 @@ export class MicrophoneCapture {
    */
   onError(callback: ErrorCallback): void {
     this.onErrorCallback = callback;
-  }
-
-  /**
-   * Get the best supported MIME type for audio recording
-   */
-  private getSupportedMimeType(): string {
-    const types = [
-      'audio/webm;codecs=opus',
-      'audio/webm',
-      'audio/ogg;codecs=opus',
-      'audio/mp4',
-    ];
-
-    for (const type of types) {
-      if (MediaRecorder.isTypeSupported(type)) {
-        console.log(`Using MIME type: ${type}`);
-        return type;
-      }
-    }
-
-    // Fallback to browser default
-    console.warn('No preferred MIME type supported, using browser default');
-    return '';
   }
 
   /**

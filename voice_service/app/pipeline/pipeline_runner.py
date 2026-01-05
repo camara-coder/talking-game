@@ -258,89 +258,26 @@ async def process_audio_stream(session_id: str, audio_data: bytes):
 
     Args:
         session_id: Session ID
-        audio_data: Raw audio bytes (WebM format from browser)
+        audio_data: Raw PCM16 audio bytes from browser AudioWorklet
     """
-    import tempfile
-    import soundfile as sf
-    import subprocess
-
     logger.info(f"Processing audio stream for session {session_id}: {len(audio_data)} bytes")
 
     try:
-        # Log audio data size
-        logger.info(f"Received audio data: {len(audio_data)} bytes")
+        # Convert raw PCM16 bytes to numpy array
+        # AudioWorklet sends Int16Array (little-endian, 2 bytes per sample)
+        pcm16_data = np.frombuffer(audio_data, dtype=np.int16)
 
-        # Write raw audio to temp file
-        with tempfile.NamedTemporaryFile(suffix='.webm', delete=False) as temp_webm:
-            temp_webm.write(audio_data)
-            temp_webm_path = temp_webm.name
+        # Convert PCM16 to float32 in range [-1.0, 1.0]
+        audio = pcm16_data.astype(np.float32) / 32768.0
 
-        logger.info(f"Wrote WebM file: {temp_webm_path} ({len(audio_data)} bytes)")
+        # Sample rate matches what AudioWorklet was configured with (16kHz)
+        sample_rate = settings.AUDIO_SAMPLE_RATE
 
-        # Create temp WAV file path
-        temp_wav = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
-        temp_wav_path = temp_wav.name
-        temp_wav.close()
-
-        # Convert WebM to WAV using ffmpeg directly
-        logger.info("Converting WebM to WAV using ffmpeg...")
-
-        # ffmpeg command: convert to mono, 16kHz WAV
-        cmd = [
-            'ffmpeg',
-            '-i', temp_webm_path,  # Input file
-            '-ar', '16000',        # Sample rate 16kHz
-            '-ac', '1',            # Mono (1 channel)
-            '-y',                  # Overwrite output file
-            temp_wav_path          # Output file
-        ]
-
-        # Run ffmpeg (in thread to not block event loop)
-        result = await asyncio.to_thread(
-            subprocess.run,
-            cmd,
-            capture_output=True,
-            text=True
-        )
-
-        if result.returncode != 0:
-            logger.error(f"ffmpeg error: {result.stderr}")
-            raise RuntimeError(f"ffmpeg conversion failed: {result.stderr}")
-
-        logger.info("Conversion complete")
-
-        # Read WAV file into numpy array
-        audio, sample_rate = sf.read(temp_wav_path, dtype='float32')
-
-        logger.info(f"Converted audio: {len(audio)} samples at {sample_rate}Hz")
-
-        # Clean up temp files
-        try:
-            os.unlink(temp_webm_path)
-            os.unlink(temp_wav_path)
-        except:
-            pass
+        logger.info(f"Converted PCM audio: {len(audio)} samples at {sample_rate}Hz")
 
         # Process through pipeline
         runner = get_pipeline_runner()
         await runner.process_session_audio(session_id, audio, sample_rate)
-
-    except FileNotFoundError as e:
-        logger.error(f"ffmpeg not found: {e}")
-
-        # Send error to client
-        await connection_manager.broadcast_error(
-            session_id,
-            "FFMPEG_NOT_FOUND",
-            "ffmpeg is required for audio conversion. Please install ffmpeg and add it to PATH."
-        )
-
-        await connection_manager.broadcast_state(
-            session_id,
-            SessionStatus.IDLE
-        )
-
-        raise
 
     except Exception as e:
         logger.error(f"Error processing audio stream: {e}", exc_info=True)
@@ -349,7 +286,7 @@ async def process_audio_stream(session_id: str, audio_data: bytes):
         await connection_manager.broadcast_error(
             session_id,
             "AUDIO_CONVERSION_ERROR",
-            f"Failed to convert audio: {str(e)}"
+            f"Failed to process audio: {str(e)}"
         )
 
         await connection_manager.broadcast_state(
