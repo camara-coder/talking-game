@@ -175,6 +175,18 @@
   min-width: 180px;
   min-height: 180px;
   cursor: pointer;
+
+  /* Prevent text selection on mobile */
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+
+  /* Prevent iOS callout menu */
+  -webkit-touch-callout: none;
+
+  /* Prevent tap highlight on mobile */
+  -webkit-tap-highlight-color: transparent;
 }
 
 .push-to-talk-button:hover:not(:disabled) {

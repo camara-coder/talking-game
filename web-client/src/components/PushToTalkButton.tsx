@@ -17,6 +17,25 @@ export const PushToTalkButton: React.FC<PushToTalkButtonProps> = ({
   const isListening = gameState === 'listening';
   const isProcessing = gameState === 'processing' || gameState === 'speaking';
 
+  // Prevent context menu and text selection on mobile
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (!disabled && !isProcessing) {
+      e.preventDefault(); // Prevent text selection on mobile
+      onPress();
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!disabled && !isProcessing) {
+      e.preventDefault();
+      onRelease();
+    }
+  };
+
   const getButtonText = () => {
     switch (gameState) {
       case 'listening':
@@ -51,11 +70,18 @@ export const PushToTalkButton: React.FC<PushToTalkButtonProps> = ({
         transform: isListening ? 'scale(1.1)' : 'scale(1)',
         cursor: disabled || isProcessing ? 'not-allowed' : 'pointer',
         opacity: disabled ? 0.5 : 1,
+        // Prevent text selection on mobile
+        WebkitUserSelect: 'none',
+        userSelect: 'none',
+        WebkitTouchCallout: 'none',
+        // Prevent tap highlight on mobile
+        WebkitTapHighlightColor: 'transparent',
       }}
       onMouseDown={!disabled && !isProcessing ? onPress : undefined}
       onMouseUp={!disabled && !isProcessing ? onRelease : undefined}
-      onTouchStart={!disabled && !isProcessing ? onPress : undefined}
-      onTouchEnd={!disabled && !isProcessing ? onRelease : undefined}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onContextMenu={handleContextMenu}
       disabled={disabled || isProcessing}
     >
       <span className="button-icon">{isListening ? '🎤' : '🗣️'}</span>
