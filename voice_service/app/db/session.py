@@ -11,24 +11,32 @@ logger = logging.getLogger(__name__)
 async_session_maker: Optional[async_sessionmaker] = None
 
 
-def init_session_factory() -> None:
+def init_session_factory() -> bool:
     """Initialize the async session factory
 
     Must be called after init_db() to set up the session maker
+
+    Returns:
+        True if successful, False otherwise
     """
     global async_session_maker
 
     engine = get_engine()
     if not engine:
-        logger.warning("Cannot initialize session factory: database engine not initialized")
-        return
+        logger.error("Cannot initialize session factory: database engine not initialized")
+        return False
 
-    async_session_maker = async_sessionmaker(
-        engine,
-        class_=AsyncSession,
-        expire_on_commit=False  # Keep objects accessible after commit
-    )
-    logger.info("Database session factory initialized")
+    try:
+        async_session_maker = async_sessionmaker(
+            engine,
+            class_=AsyncSession,
+            expire_on_commit=False  # Keep objects accessible after commit
+        )
+        logger.info("Database session factory initialized successfully")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to initialize session factory: {e}", exc_info=True)
+        return False
 
 
 @asynccontextmanager

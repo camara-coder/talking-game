@@ -152,6 +152,9 @@ class SessionManager:
                         self.sessions[session_id] = session
                         logger.info(f"Session resumed from DB: {session_id} ({len(session.turns)} turns)")
                         return session
+            except RuntimeError as e:
+                # Database not available - continue to create new session
+                logger.warning(f"Database not available, creating new session: {e}")
             except Exception as e:
                 logger.error(f"Failed to resume session from DB: {e}", exc_info=True)
 
@@ -174,6 +177,9 @@ class SessionManager:
                 db_model = session.to_db()
                 await repo.create(db_model)
                 logger.debug(f"Session persisted to DB: {session.session_id}")
+        except RuntimeError as e:
+            # Database not available - log warning but don't crash
+            logger.warning(f"Database not available, session not persisted: {e}")
         except Exception as e:
             logger.error(f"Failed to persist session: {e}", exc_info=True)
 
@@ -185,6 +191,7 @@ class SessionManager:
             turn: Turn object to persist
         """
         if not self._db_enabled:
+            logger.debug("Database persistence disabled, skipping turn persist")
             return
 
         try:
@@ -197,6 +204,9 @@ class SessionManager:
                 db_turn.session_id = session_id
                 await repo.create(db_turn)
                 logger.debug(f"Turn persisted to DB: {turn.turn_id}")
+        except RuntimeError as e:
+            # Database not available - log warning but don't crash
+            logger.warning(f"Database not available, turn not persisted: {e}")
         except Exception as e:
             logger.error(f"Failed to persist turn: {e}", exc_info=True)
 

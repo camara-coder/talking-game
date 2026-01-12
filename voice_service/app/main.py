@@ -84,14 +84,21 @@ async def startup_event():
                 echo=settings.DB_ECHO
             )
             if engine:
-                init_session_factory()
-                logger.info("Database initialized successfully")
+                logger.info("Database engine created successfully")
 
-                # Start cleanup background task
-                asyncio.create_task(cleanup_old_data_task())
-                logger.info(f"Cleanup task started: will delete data older than {settings.DATA_RETENTION_DAYS} days")
+                # Initialize session factory
+                factory_initialized = init_session_factory()
+
+                if factory_initialized:
+                    logger.info("Database initialized successfully - persistence enabled")
+
+                    # Start cleanup background task
+                    asyncio.create_task(cleanup_old_data_task())
+                    logger.info(f"Cleanup task started: will delete data older than {settings.DATA_RETENTION_DAYS} days")
+                else:
+                    logger.error("Session factory initialization failed - persistence disabled")
             else:
-                logger.warning("Database initialization failed, persistence disabled")
+                logger.warning("Database engine initialization failed, persistence disabled")
         except Exception as e:
             logger.error(f"Failed to initialize database: {e}", exc_info=True)
             logger.warning("Continuing without database persistence")
