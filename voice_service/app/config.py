@@ -115,6 +115,25 @@ class Settings(BaseSettings):
     DATA_RETENTION_DAYS: int = 30  # Delete sessions and audio older than this
     CLEANUP_INTERVAL_HOURS: int = 24  # Run cleanup task every N hours
 
+    @property
+    def database_url_async(self) -> str:
+        """Get DATABASE_URL with async driver for SQLAlchemy async operations
+
+        Railway provides DATABASE_URL as postgresql:// which defaults to psycopg2 (sync).
+        We need postgresql+asyncpg:// for async operations.
+        """
+        if not self.DATABASE_URL:
+            return ""
+
+        # Convert standard postgresql:// to async asyncpg driver
+        if self.DATABASE_URL.startswith("postgresql://"):
+            return self.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+        elif self.DATABASE_URL.startswith("postgres://"):
+            return self.DATABASE_URL.replace("postgres://", "postgresql+asyncpg://", 1)
+        else:
+            # Already has driver specified or is empty
+            return self.DATABASE_URL
+
     # CORS Configuration (for Web Frontend)
     # Can be overridden via CORS_ORIGINS environment variable (comma-separated)
     CORS_ORIGINS: str = ""  # Will be parsed below

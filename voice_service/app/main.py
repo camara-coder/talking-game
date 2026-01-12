@@ -76,9 +76,10 @@ async def startup_event():
     # Initialize database (if enabled)
     if settings.ENABLE_DB_PERSISTENCE:
         logger.info("Initializing database...")
+        logger.info(f"Database URL format: {settings.database_url_async.split('@')[0]}@***")  # Log without credentials
         try:
             engine = await init_db(
-                database_url=settings.DATABASE_URL,
+                database_url=settings.database_url_async,
                 pool_size=settings.DB_POOL_SIZE,
                 max_overflow=settings.DB_MAX_OVERFLOW,
                 echo=settings.DB_ECHO
