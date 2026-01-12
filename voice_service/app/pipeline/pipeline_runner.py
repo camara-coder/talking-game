@@ -167,6 +167,11 @@ class PipelineRunner:
             # Complete turn
             session.complete_turn()
 
+            # Persist turn to database (async background task)
+            if len(session.turns) > 0:
+                last_turn = session.turns[-1]
+                asyncio.create_task(session_manager.persist_turn(session_id, last_turn))
+
             # After a brief moment, go back to idle
             await asyncio.sleep(0.5)
             await connection_manager.broadcast_state(

@@ -112,6 +112,41 @@ class Turn(BaseModel):
     audio_path: Optional[str] = None
     processing_time_ms: Optional[int] = None
 
+    @classmethod
+    def from_db(cls, db_turn: "DBTurn") -> "Turn":
+        """Convert database model to Pydantic model
+
+        Args:
+            db_turn: DBTurn ORM model from database
+
+        Returns:
+            Turn Pydantic model
+        """
+        return cls(
+            turn_id=db_turn.turn_id,
+            timestamp=db_turn.timestamp,
+            transcript=db_turn.transcript,
+            reply_text=db_turn.reply_text,
+            audio_path=db_turn.audio_path,
+            processing_time_ms=db_turn.processing_time_ms
+        )
+
+    def to_db(self) -> "DBTurn":
+        """Convert to database model
+
+        Returns:
+            DBTurn ORM model for database persistence
+        """
+        from app.db.models import DBTurn
+        return DBTurn(
+            turn_id=self.turn_id,
+            timestamp=self.timestamp,
+            transcript=self.transcript,
+            reply_text=self.reply_text,
+            audio_path=self.audio_path,
+            processing_time_ms=self.processing_time_ms
+        )
+
 
 class Session(BaseModel):
     """Represents a conversation session"""
@@ -157,3 +192,44 @@ class Session(BaseModel):
                     "assistant": turn.reply_text
                 })
         return context
+
+    @classmethod
+    def from_db(cls, db_session: "DBSession", turns: Optional[List["DBTurn"]] = None) -> "Session":
+        """Convert database model to Pydantic model
+
+        Args:
+            db_session: DBSession ORM model from database
+            turns: Optional list of DBTurn models to include
+
+        Returns:
+            Session Pydantic model with turns loaded
+        """
+        session = cls(
+            session_id=db_session.session_id,
+            created_at=db_session.created_at,
+            updated_at=db_session.updated_at,
+            status=db_session.status,
+            language=db_session.language,
+            mode=db_session.mode
+        )
+        if turns:
+            session.turns = [Turn.from_db(t) for t in turns]
+        return session
+
+    def to_db(self) -> "DBSession":
+        """Convert to database model
+
+        Returns:
+            DBSession ORM model for database persistence
+        """
+        from app.db.models import DBSession
+        return DBSession(
+            session_id=self.session_id,
+            created_at=self.created_at,
+            updated_at=self.updated_at,
+            status=self.status,
+            language=self.language,
+            mode=self.mode,
+            total_turns=len(self.turns),
+            last_activity_at=self.updated_at
+        )

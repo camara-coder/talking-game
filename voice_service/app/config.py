@@ -104,6 +104,17 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
+    # Database Configuration (PostgreSQL)
+    DATABASE_URL: str = ""  # Set via environment variable (e.g., postgresql+asyncpg://user:pass@host:5432/dbname)
+    ENABLE_DB_PERSISTENCE: bool = False  # Feature flag to enable/disable database persistence
+    DB_POOL_SIZE: int = 10  # Number of connections to maintain in the pool
+    DB_MAX_OVERFLOW: int = 20  # Maximum overflow connections beyond pool_size
+    DB_ECHO: bool = False  # SQLAlchemy query logging for debugging
+
+    # Data Retention Policy
+    DATA_RETENTION_DAYS: int = 30  # Delete sessions and audio older than this
+    CLEANUP_INTERVAL_HOURS: int = 24  # Run cleanup task every N hours
+
     # CORS Configuration (for Web Frontend)
     # Can be overridden via CORS_ORIGINS environment variable (comma-separated)
     CORS_ORIGINS: str = ""  # Will be parsed below

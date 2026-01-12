@@ -6,7 +6,7 @@ import asyncio
 import logging
 from datetime import datetime, timedelta
 
-from app.api.models import Session, SessionStatus
+from app.api.models import Session, SessionStatus, Turn
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -18,6 +18,8 @@ class SessionManager:
     def __init__(self):
         self.sessions: Dict[str, Session] = {}
         self._cleanup_task: Optional[asyncio.Task] = None
+        self._db_enabled = settings.ENABLE_DB_PERSISTENCE
+        logger.info(f"Database persistence: {'enabled' if self._db_enabled else 'disabled'}")
 
     async def start(self):
         """Start session manager background tasks"""
@@ -48,6 +50,11 @@ class SessionManager:
 
         self.sessions[session.session_id] = session
         logger.info(f"Session created: {session.session_id}")
+
+        # Persist to database (async background task)
+        if self._db_enabled:
+            asyncio.create_task(self._persist_session(session))
+
         return session
 
     def get_session(self, session_id: str) -> Optional[Session]:
@@ -104,6 +111,94 @@ class SessionManager:
                 break
             except Exception as e:
                 logger.error(f"Error in session cleanup: {e}", exc_info=True)
+
+    async def resume_or_create_session(self, session_id: str, language: str = "en", mode: str = "ptt") -> Session:
+        """Resume existing session from DB or create new one
+
+        Args:
+            session_id: Session ID to resume or create
+            language: Language code (default: "en")
+            mode: Interaction mode (default: "ptt")
+
+        Returns:
+            Session object (either resumed from DB or newly created)
+        """
+        # Check in-memory cache first
+        if session_id in self.sessions:
+            logger.info(f"Session found in memory: {session_id}")
+            return self.sessions[session_id]
+
+        # Try to load from database
+        if self._db_enabled:
+            try:
+                from app.db.session import get_db_session
+                from app.db.repositories.session_repository import SessionRepository
+                from app.db.repositories.turn_repository import TurnRepository
+                from app.api.models import Session
+
+                async with get_db_session() as db_session:
+                    session_repo = SessionRepository(db_session)
+                    turn_repo = TurnRepository(db_session)
+
+                    db_session_obj = await session_repo.get_by_id(session_id)
+                    if db_session_obj:
+                        # Load turns (limit to 50 most recent)
+                        db_turns = await turn_repo.get_by_session(session_id, limit=50)
+
+                        # Reconstruct session
+                        session = Session.from_db(db_session_obj, db_turns)
+
+                        # Add to in-memory cache
+                        self.sessions[session_id] = session
+                        logger.info(f"Session resumed from DB: {session_id} ({len(session.turns)} turns)")
+                        return session
+            except Exception as e:
+                logger.error(f"Failed to resume session from DB: {e}", exc_info=True)
+
+        # Create new session
+        logger.info(f"Creating new session: {session_id}")
+        return self.create_session(session_id=session_id, language=language, mode=mode)
+
+    async def _persist_session(self, session: Session) -> None:
+        """Persist session to database (async background task)
+
+        Args:
+            session: Session object to persist
+        """
+        try:
+            from app.db.session import get_db_session
+            from app.db.repositories.session_repository import SessionRepository
+
+            async with get_db_session() as db_session:
+                repo = SessionRepository(db_session)
+                db_model = session.to_db()
+                await repo.create(db_model)
+                logger.debug(f"Session persisted to DB: {session.session_id}")
+        except Exception as e:
+            logger.error(f"Failed to persist session: {e}", exc_info=True)
+
+    async def persist_turn(self, session_id: str, turn: "Turn") -> None:
+        """Persist a completed turn to database
+
+        Args:
+            session_id: Session ID the turn belongs to
+            turn: Turn object to persist
+        """
+        if not self._db_enabled:
+            return
+
+        try:
+            from app.db.session import get_db_session
+            from app.db.repositories.turn_repository import TurnRepository
+
+            async with get_db_session() as db_session:
+                repo = TurnRepository(db_session)
+                db_turn = turn.to_db()
+                db_turn.session_id = session_id
+                await repo.create(db_turn)
+                logger.debug(f"Turn persisted to DB: {turn.turn_id}")
+        except Exception as e:
+            logger.error(f"Failed to persist turn: {e}", exc_info=True)
 
 
 # Global session manager instance

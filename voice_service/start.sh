@@ -19,6 +19,21 @@ sleep 5
 echo "Downloading Ollama model in background..."
 (ollama pull qwen2.5:0.5b-instruct && echo "Model download complete") > /tmp/model-download.log 2>&1 &
 
+# Run database migrations (if database is enabled)
+if [ "$ENABLE_DB_PERSISTENCE" = "true" ]; then
+    echo "Running database migrations..."
+    alembic upgrade head
+
+    if [ $? -eq 0 ]; then
+        echo "✅ Database migrations completed successfully"
+    else
+        echo "❌ Database migration failed"
+        exit 1
+    fi
+else
+    echo "⚠️  Database persistence disabled, skipping migrations"
+fi
+
 # Start FastAPI server immediately
 echo "Starting FastAPI server..."
 exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8008}

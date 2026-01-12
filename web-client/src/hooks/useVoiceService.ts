@@ -107,7 +107,7 @@ export function useVoiceService(): UseVoiceServiceResult {
     };
   }, []);
 
-  // Initialize connection
+  // Initialize connection and create persistent session
   useEffect(() => {
     const initConnection = async () => {
       try {
@@ -115,6 +115,16 @@ export function useVoiceService(): UseVoiceServiceResult {
         const health = await apiRef.current.checkHealth();
         console.log('Voice service health:', health);
         setIsConnected(true);
+
+        // Create persistent session on mount
+        const response = await apiRef.current.startSession();
+        const newSessionId = response.session_id;
+        setSessionId(newSessionId);
+        console.log('Persistent session created:', newSessionId);
+
+        // Connect WebSocket with persistent session
+        await wsRef.current.connect(newSessionId);
+        console.log('WebSocket connected');
       } catch (err) {
         console.error('Failed to connect to voice service:', err);
         setError('Voice service is not available');
@@ -148,18 +158,20 @@ export function useVoiceService(): UseVoiceServiceResult {
       // Unlock audio context for mobile browsers (must be in user gesture handler)
       await audioPlayerRef.current.unlock();
 
-      // Create session
-      const response = await apiRef.current.startSession();
-      const newSessionId = response.session_id;
-      setSessionId(newSessionId);
+      // Verify session is initialized
+      if (!sessionId) {
+        throw new Error('Session not initialized');
+      }
 
-      console.log('Session created:', newSessionId);
+      console.log('Using persistent session:', sessionId);
 
-      // Connect WebSocket FIRST (before starting audio)
+      // WebSocket should already be connected from useEffect
+      // Just verify connection state
       const ws = wsRef.current;
-      await ws.connect(newSessionId);
-
-      console.log('WebSocket connected');
+      if (!ws.isConnected) {
+        console.log('WebSocket disconnected, reconnecting...');
+        await ws.connect(sessionId);
+      }
 
       // Send audio configuration
       await ws.sendAudioStart({
@@ -195,7 +207,7 @@ export function useVoiceService(): UseVoiceServiceResult {
       setError((err as Error).message || 'Failed to start session');
       setGameState('idle');
     }
-  }, []);
+  }, [sessionId]); // Add sessionId as dependency
 
   const stopListening = useCallback(async () => {
     if (!sessionId) {

@@ -10,6 +10,13 @@ import sys
 from datetime import datetime
 
 from app.config import settings
+import asyncio
+
+# Database imports (conditional)
+if settings.ENABLE_DB_PERSISTENCE:
+    from app.db.base import init_db, close_db
+    from app.db.session import init_session_factory
+    from app.tasks.cleanup import cleanup_old_data_task
 
 # Configure logging
 logging.basicConfig(
@@ -66,6 +73,31 @@ async def startup_event():
     # Start session manager
     await session_manager.start()
 
+    # Initialize database (if enabled)
+    if settings.ENABLE_DB_PERSISTENCE:
+        logger.info("Initializing database...")
+        try:
+            engine = await init_db(
+                database_url=settings.DATABASE_URL,
+                pool_size=settings.DB_POOL_SIZE,
+                max_overflow=settings.DB_MAX_OVERFLOW,
+                echo=settings.DB_ECHO
+            )
+            if engine:
+                init_session_factory()
+                logger.info("Database initialized successfully")
+
+                # Start cleanup background task
+                asyncio.create_task(cleanup_old_data_task())
+                logger.info(f"Cleanup task started: will delete data older than {settings.DATA_RETENTION_DAYS} days")
+            else:
+                logger.warning("Database initialization failed, persistence disabled")
+        except Exception as e:
+            logger.error(f"Failed to initialize database: {e}", exc_info=True)
+            logger.warning("Continuing without database persistence")
+    else:
+        logger.info("Database persistence disabled (ENABLE_DB_PERSISTENCE=False)")
+
 
 # Shutdown event
 @app.on_event("shutdown")
@@ -75,6 +107,12 @@ async def shutdown_event():
 
     # Stop session manager
     await session_manager.stop()
+
+    # Close database connections (if enabled)
+    if settings.ENABLE_DB_PERSISTENCE:
+        logger.info("Closing database connections...")
+        await close_db()
+        logger.info("Database connections closed")
 
 
 # Root endpoint
