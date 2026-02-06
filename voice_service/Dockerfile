@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     python3-dev \
     portaudio19-dev \
+    zstd \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Ollama
