@@ -123,6 +123,11 @@ class SessionManager:
         Returns:
             Session object (either resumed from DB or newly created)
         """
+        # If no session_id provided, skip lookup and create new
+        if not session_id:
+            logger.info("No session_id provided, creating new session")
+            return self.create_session(language=language, mode=mode)
+
         # Check in-memory cache first
         if session_id in self.sessions:
             logger.info(f"Session found in memory: {session_id}")
@@ -142,8 +147,10 @@ class SessionManager:
 
                     db_session_obj = await session_repo.get_by_id(session_id)
                     if db_session_obj:
-                        # Load turns (limit to 50 most recent)
-                        db_turns = await turn_repo.get_by_session(session_id, limit=50)
+                        # Load only the turns needed for LLM context
+                        db_turns = await turn_repo.get_by_session(
+                            session_id, limit=settings.LLM_CONTEXT_TURNS
+                        )
 
                         # Reconstruct session
                         session = Session.from_db(db_session_obj, db_turns)
@@ -197,13 +204,22 @@ class SessionManager:
         try:
             from app.db.session import get_db_session
             from app.db.repositories.turn_repository import TurnRepository
+            from app.db.repositories.session_repository import SessionRepository
 
             async with get_db_session() as db_session:
-                repo = TurnRepository(db_session)
+                turn_repo = TurnRepository(db_session)
                 db_turn = turn.to_db()
                 db_turn.session_id = session_id
-                await repo.create(db_turn)
+                await turn_repo.create(db_turn)
                 logger.debug(f"Turn persisted to DB: {turn.turn_id}")
+
+                # Update session metadata (total_turns, last_activity_at)
+                session = self.get_session(session_id)
+                if session:
+                    session_repo = SessionRepository(db_session)
+                    db_session_model = session.to_db()
+                    await session_repo.update(db_session_model)
+                    logger.debug(f"Session metadata updated in DB: {session_id}")
         except RuntimeError as e:
             # Database not available - log warning but don't crash
             logger.warning(f"Database not available, turn not persisted: {e}")

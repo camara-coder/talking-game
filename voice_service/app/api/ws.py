@@ -83,8 +83,24 @@ class ConnectionManager:
         logger.info(f"WebSocket disconnected for session {session_id}")
 
     async def handle_audio_start(self, session_id: str, config: dict):
-        """Handle audio.start message"""
+        """Handle audio.start message - creates a new turn and starts buffering audio"""
         logger.info(f"Audio streaming started for session {session_id}: {config}")
+
+        # Look up session and start a new turn
+        session = session_manager.get_session(session_id)
+        if not session:
+            logger.error(f"Session not found for audio.start: {session_id}")
+            await self.broadcast_error(
+                session_id,
+                "SESSION_NOT_FOUND",
+                f"Session {session_id} not found. Please start a new session."
+            )
+            return
+
+        # Start a new turn if one isn't already in progress
+        if session.current_turn is None:
+            session.start_turn()
+            logger.info(f"New turn started for session {session_id}: {session.current_turn.turn_id}")
 
         async with self._lock:
             # Create new audio buffer
@@ -263,6 +279,9 @@ async def websocket_endpoint(
     await connection_manager.connect(websocket, session_id)
 
     try:
+        # Ensure session is loaded (from memory or DB) before processing messages
+        await session_manager.resume_or_create_session(session_id)
+
         # Send initial connection confirmation
         await connection_manager.broadcast_state(session_id, SessionStatus.IDLE)
 

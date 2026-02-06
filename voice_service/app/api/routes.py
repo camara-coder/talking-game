@@ -30,19 +30,15 @@ async def start_session(request: SessionStartRequest):
     Initializes session state and begins listening
     """
     try:
-        # Create new session
-        session = session_manager.create_session(
-            session_id=request.session_id,
+        # Resume existing session from DB or create a new one
+        session = await session_manager.resume_or_create_session(
+            session_id=request.session_id or "",
             language=request.language,
             mode=request.mode
         )
 
-        # Start a new turn (listening state)
-        turn = session.start_turn()
-
         logger.info(
             f"Session started: {session.session_id}, "
-            f"Turn: {turn.turn_id}, "
             f"Status: {session.status}"
         )
 
