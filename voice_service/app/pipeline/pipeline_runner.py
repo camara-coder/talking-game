@@ -53,8 +53,8 @@ class PipelineRunner:
             return False
 
         if not session.current_turn:
-            logger.error(f"No current turn for session: {session_id}")
-            return False
+            logger.warning(f"No current turn for session {session_id}, creating one as fallback")
+            session.start_turn()
 
         turn_id = session.current_turn.turn_id
 

@@ -5,6 +5,8 @@ import { AudioPlayer } from '../lib/audio';
 import { MicrophoneCapture } from '../lib/microphone';
 import type { GameState, AudioReadyPayload } from '../types';
 
+const SESSION_STORAGE_KEY = 'voice_session_id';
+
 export interface UseVoiceServiceResult {
   gameState: GameState;
   transcript: string;
@@ -13,6 +15,7 @@ export interface UseVoiceServiceResult {
   isConnected: boolean;
   startListening: () => Promise<void>;
   stopListening: () => Promise<void>;
+  clearSession: () => Promise<void>;
 }
 
 export function useVoiceService(): UseVoiceServiceResult {
@@ -107,7 +110,7 @@ export function useVoiceService(): UseVoiceServiceResult {
     };
   }, []);
 
-  // Initialize connection and create persistent session
+  // Initialize connection and resume or create persistent session
   useEffect(() => {
     const initConnection = async () => {
       try {
@@ -116,11 +119,25 @@ export function useVoiceService(): UseVoiceServiceResult {
         console.log('Voice service health:', health);
         setIsConnected(true);
 
-        // Create persistent session on mount
-        const response = await apiRef.current.startSession();
+        // Check localStorage for an existing session to resume
+        const storedSessionId = localStorage.getItem(SESSION_STORAGE_KEY);
+        const request = storedSessionId
+          ? { session_id: storedSessionId }
+          : {};
+
+        // Resume existing session from DB or create a new one
+        const response = await apiRef.current.startSession(request);
         const newSessionId = response.session_id;
         setSessionId(newSessionId);
-        console.log('Persistent session created:', newSessionId);
+
+        // Persist session_id so it survives page refreshes
+        localStorage.setItem(SESSION_STORAGE_KEY, newSessionId);
+
+        console.log(
+          storedSessionId
+            ? `Session resumed: ${newSessionId}`
+            : `New session created: ${newSessionId}`
+        );
 
         // Connect WebSocket with persistent session
         await wsRef.current.connect(newSessionId);
@@ -238,6 +255,36 @@ export function useVoiceService(): UseVoiceServiceResult {
     }
   }, [sessionId]);
 
+  const clearSession = useCallback(async () => {
+    try {
+      console.log('Clearing session and starting fresh...');
+
+      // Remove stored session so the next one is brand new
+      localStorage.removeItem(SESSION_STORAGE_KEY);
+
+      // Create a fresh session (no session_id → backend generates new)
+      const response = await apiRef.current.startSession();
+      const newSessionId = response.session_id;
+      setSessionId(newSessionId);
+      localStorage.setItem(SESSION_STORAGE_KEY, newSessionId);
+
+      // Reconnect WebSocket to new session
+      wsRef.current.disconnect();
+      await wsRef.current.connect(newSessionId);
+
+      // Reset UI state
+      setTranscript('');
+      setReplyText('');
+      setError(null);
+      setGameState('idle');
+
+      console.log('New session started:', newSessionId);
+    } catch (err) {
+      console.error('Failed to clear session:', err);
+      setError('Failed to start new conversation');
+    }
+  }, []);
+
   return {
     gameState,
     transcript,
@@ -246,5 +293,6 @@ export function useVoiceService(): UseVoiceServiceResult {
     isConnected,
     startListening,
     stopListening,
+    clearSession,
   };
 }
