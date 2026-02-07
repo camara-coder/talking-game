@@ -11,7 +11,10 @@ sounddevice>=0.5.1
 soundfile>=0.12.1
 numpy>=1.26.0
 scipy>=1.14.0
-webrtcvad>=2.0.10
+# webrtcvad>=2.0.10  # Legacy energy-based VAD (replaced by Silero VAD)
+torch>=2.0.0  # CPU-only; install with: pip install torch --index-url https://download.pytorch.org/whl/cpu
+silero-vad>=5.1
+noisereduce>=3.0.0  # Server-side noise reduction (runs before VAD and STT)
 # Note: Audio conversion uses ffmpeg directly (no Python package needed)
 
 # Speech-to-Text

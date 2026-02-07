@@ -11,6 +11,11 @@ from io import BytesIO
 from app.api.models import WebSocketEvent, EventType, SessionStatus
 from app.config import settings
 from app.api.session_manager import session_manager
+from app.pipeline.streaming_vad import (
+    StreamingVADState,
+    create_streaming_vad_state,
+    process_chunk as vad_process_chunk,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +56,10 @@ class ConnectionManager:
         self.active_connections: Dict[str, Set[WebSocket]] = {}
         # Map of session_id -> AudioBuffer for accumulating audio chunks
         self.audio_buffers: Dict[str, AudioBuffer] = {}
+        # Map of session_id -> StreamingVADState for endpointing
+        self.streaming_vad_states: Dict[str, StreamingVADState] = {}
+        # Guard to ensure pipeline runs once per turn
+        self.processing_started: Dict[str, bool] = {}
         self._lock = asyncio.Lock()
 
     async def connect(self, websocket: WebSocket, session_id: str):
@@ -79,6 +88,11 @@ class ConnectionManager:
             # Clean up audio buffer
             if session_id in self.audio_buffers:
                 del self.audio_buffers[session_id]
+            # Clean up streaming VAD state
+            if session_id in self.streaming_vad_states:
+                del self.streaming_vad_states[session_id]
+            if session_id in self.processing_started:
+                del self.processing_started[session_id]
 
         logger.info(f"WebSocket disconnected for session {session_id}")
 
@@ -106,6 +120,13 @@ class ConnectionManager:
             # Create new audio buffer
             self.audio_buffers[session_id] = AudioBuffer(session_id)
             self.audio_buffers[session_id].config = config
+            self.processing_started[session_id] = False
+            if settings.STREAMING_VAD_ENABLED:
+                try:
+                    self.streaming_vad_states[session_id] = create_streaming_vad_state(session_id)
+                    logger.info(f"Streaming VAD initialized for session {session_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to init streaming VAD (will use batch): {e}")
 
         # Broadcast listening state
         await self.broadcast_state(session_id, SessionStatus.LISTENING)
@@ -119,34 +140,17 @@ class ConnectionManager:
                 self.audio_buffers[session_id] = AudioBuffer(session_id)
 
             self.audio_buffers[session_id].add_chunk(chunk)
+        # Run streaming endpointing outside the lock
+        if settings.STREAMING_VAD_ENABLED:
+            vad_state = self.streaming_vad_states.get(session_id)
+            if vad_state and not vad_state.endpoint_detected:
+                if vad_process_chunk(vad_state, chunk):
+                    await self._trigger_processing_once(session_id, source="vad_end")
 
     async def handle_audio_end(self, session_id: str):
         """Handle audio.end message and trigger processing"""
         logger.info(f"Audio streaming ended for session {session_id}")
-
-        # Get audio data
-        audio_data = None
-        async with self._lock:
-            if session_id in self.audio_buffers:
-                buffer = self.audio_buffers[session_id]
-                audio_data = buffer.get_audio_data()
-                logger.info(f"Total audio received: {len(audio_data)} bytes")
-            else:
-                logger.warning(f"No audio buffer for session {session_id}")
-
-        # Broadcast processing state
-        await self.broadcast_state(session_id, SessionStatus.PROCESSING)
-
-        if audio_data:
-            # Trigger pipeline processing (async)
-            asyncio.create_task(self._process_audio(session_id, audio_data))
-        else:
-            await self.broadcast_error(
-                session_id,
-                "NO_AUDIO",
-                "No audio data received"
-            )
-            await self.broadcast_state(session_id, SessionStatus.IDLE)
+        await self._trigger_processing_once(session_id, source="audio_end")
 
     async def _process_audio(self, session_id: str, audio_data: bytes):
         """Process received audio through the pipeline"""
@@ -171,6 +175,35 @@ class ConnectionManager:
             async with self._lock:
                 if session_id in self.audio_buffers:
                     del self.audio_buffers[session_id]
+
+    async def _trigger_processing_once(self, session_id: str, source: str):
+        async with self._lock:
+            if self.processing_started.get(session_id):
+                logger.info(f"Processing already started for {session_id} (source={source})")
+                return
+            self.processing_started[session_id] = True
+
+            audio_data = None
+            if session_id in self.audio_buffers:
+                audio_data = self.audio_buffers[session_id].get_audio_data()
+                logger.info(f"Triggering processing from {source}, bytes={len(audio_data)}")
+            else:
+                logger.warning(f"No audio buffer for session {session_id}")
+
+            if session_id in self.streaming_vad_states:
+                del self.streaming_vad_states[session_id]
+
+        await self.broadcast_state(session_id, SessionStatus.PROCESSING)
+
+        if audio_data:
+            asyncio.create_task(self._process_audio(session_id, audio_data))
+        else:
+            await self.broadcast_error(
+                session_id,
+                "NO_AUDIO",
+                "No audio data received"
+            )
+            await self.broadcast_state(session_id, SessionStatus.IDLE)
 
     async def send_event(self, session_id: str, event: WebSocketEvent):
         """Send event to all connections for a session"""

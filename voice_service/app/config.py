@@ -49,6 +49,18 @@ class Settings(BaseSettings):
     VAD_MAX_UTTERANCE_SEC: int = 12  # Maximum recording length
     VAD_FRAME_DURATION_MS: int = 30  # Must be 10, 20, or 30
 
+    # Silero VAD Configuration (neural network VAD — replaces webrtcvad)
+    SILERO_VAD_THRESHOLD: float = 0.35       # Speech probability threshold (0.0-1.0)
+    SILERO_VAD_MIN_SPEECH_MS: int = 250      # Minimum speech duration to keep (ms)
+    SILERO_VAD_MIN_SILENCE_MS: int = 150     # Silence duration to split segments (ms)
+    SILERO_VAD_SPEECH_PAD_MS: int = 60       # Padding before/after speech (ms)
+
+    # Streaming VAD endpointing
+    STREAMING_VAD_ENABLED: bool = True  # Set to False to disable endpointing
+
+    # Noise Reduction Configuration
+    NOISE_REDUCE_PROP_DECREASE: float = 0.6  # Reduction strength (0.0-1.0)
+
     # STT Configuration
     STT_MODEL_SIZE: str = "base.en"  # or "small.en" for better accuracy
     STT_DEVICE: str = "cpu"

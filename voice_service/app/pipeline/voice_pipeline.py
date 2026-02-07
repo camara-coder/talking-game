@@ -7,7 +7,8 @@ import numpy as np
 from typing import Optional, Dict, Any
 import time
 
-from app.pipeline.processors.vad_processor import VADProcessor
+from app.pipeline.processors.noise_reducer import NoiseReducer
+from app.pipeline.processors.vad_silero import SileroVADProcessor as VADProcessor
 from app.pipeline.processors.stt_elevenlabs import ElevenLabsSTTProcessor as STTProcessor
 from app.pipeline.processors.skills_router import SkillsRouterProcessor
 from app.pipeline.processors.llm_ollama import OllamaLLMProcessor
@@ -25,6 +26,7 @@ class VoicePipeline:
         logger.info("Initializing voice pipeline...")
 
         # Initialize processors
+        self.noise_reducer = NoiseReducer()
         self.vad = VADProcessor()
         self.stt = STTProcessor()
         self.skills_router = SkillsRouterProcessor()
@@ -73,17 +75,21 @@ class VoicePipeline:
             logger.info("Starting voice pipeline processing")
             logger.info("=" * 60)
 
-            # Step 1: VAD - Trim silence
-            logger.info("Step 1: VAD processing...")
-            vad_audio = self.vad.process(audio)
+            # Step 1: Noise Reduction
+            logger.info("Step 1: Noise reduction...")
+            clean_audio = self.noise_reducer.process(audio)
+
+            # Step 2: VAD - Trim silence
+            logger.info("Step 2: VAD processing...")
+            vad_audio = self.vad.process(clean_audio)
 
             if vad_audio is None:
                 result["error"] = "No speech detected"
                 logger.warning(result["error"])
                 return result
 
-            # Step 2: STT - Transcribe
-            logger.info("Step 2: STT processing...")
+            # Step 3: STT - Transcribe
+            logger.info("Step 3: STT processing...")
             transcript = self.stt.transcribe(vad_audio, sample_rate)
 
             if not transcript:
@@ -94,8 +100,8 @@ class VoicePipeline:
             result["transcript"] = transcript
             logger.info(f"Transcript: '{transcript}'")
 
-            # Step 3: Skills Router - Check for math or route to LLM
-            logger.info("Step 3: Skills routing...")
+            # Step 4: Skills Router - Check for math or route to LLM
+            logger.info("Step 4: Skills routing...")
             route, math_response = self.skills_router.route(transcript)
             result["route"] = route
 
@@ -106,7 +112,7 @@ class VoicePipeline:
 
             elif route == "llm" or (route == "math" and not math_response):
                 # Route to LLM
-                logger.info("Step 4: LLM processing...")
+                logger.info("Step 5: LLM processing...")
                 llm_response = self.llm.generate(
                     prompt=transcript,
                     context=context
@@ -125,8 +131,8 @@ class VoicePipeline:
                 logger.error(result["error"])
                 return result
 
-            # Step 5: Response Shaper - Enforce kid-mode constraints
-            logger.info("Step 5: Response shaping...")
+            # Step 6: Response Shaper - Enforce kid-mode constraints
+            logger.info("Step 6: Response shaping...")
             shaped_reply = self.response_shaper.shape(reply_text)
             result["reply_text"] = shaped_reply
 

@@ -8,7 +8,7 @@ class PCMProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
     this.sampleBuffer = [];
-    this.bufferSize = 4096; // Send chunks of 4096 samples (~256ms at 16kHz)
+    this.bufferSize = 1024; // Send chunks of 1024 samples (~64ms at 16kHz)
   }
 
   /**
