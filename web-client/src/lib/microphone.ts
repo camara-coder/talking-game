@@ -21,6 +21,7 @@ export class MicrophoneCapture {
   private audioWorkletNode: AudioWorkletNode | null = null;
   private audioStream: MediaStream | null = null;
   private sourceNode: MediaStreamAudioSourceNode | null = null;
+  private silentGainNode: GainNode | null = null;
   private isRecording = false;
 
   private onChunkCallback: AudioChunkCallback | null = null;
@@ -53,15 +54,26 @@ export class MicrophoneCapture {
       });
 
       // Create AudioContext with desired sample rate
+      // Note: Android Chrome may ignore the requested sampleRate and use the
+      // device's native rate (e.g. 44100 or 48000). We detect and handle this.
       this.audioContext = new AudioContext({
         sampleRate: this.options.sampleRate,
       });
 
       console.log('Microphone access granted');
       console.log('Audio constraints:', {
-        sampleRate: this.audioContext.sampleRate,
+        requestedSampleRate: this.options.sampleRate,
+        actualSampleRate: this.audioContext.sampleRate,
+        sampleRateMatch: this.audioContext.sampleRate === this.options.sampleRate,
         format: 'PCM16',
       });
+
+      if (this.audioContext.sampleRate !== this.options.sampleRate) {
+        console.warn(
+          `AudioContext sample rate mismatch: requested ${this.options.sampleRate}Hz, ` +
+          `got ${this.audioContext.sampleRate}Hz. Backend will resample.`
+        );
+      }
 
       // Load AudioWorklet module
       await this.audioContext.audioWorklet.addModule('/pcm-processor.js');
@@ -99,6 +111,16 @@ export class MicrophoneCapture {
     }
 
     try {
+      // Resume AudioContext if suspended (critical for Android Chrome and mobile browsers).
+      // AudioContexts created outside user gestures start suspended on mobile.
+      // This resume call happens inside a user gesture handler (button press),
+      // so the browser will allow it.
+      if (this.audioContext.state === 'suspended') {
+        console.log('AudioContext is suspended, resuming for mobile...');
+        await this.audioContext.resume();
+        console.log('AudioContext resumed, state:', this.audioContext.state);
+      }
+
       // Create source node from microphone stream
       this.sourceNode = this.audioContext.createMediaStreamSource(this.audioStream);
 
@@ -129,12 +151,18 @@ export class MicrophoneCapture {
         }
       };
 
-      // Connect: microphone -> AudioWorklet -> (destination not needed, we just capture)
+      // Connect: microphone -> AudioWorklet -> silent GainNode -> destination
+      // On mobile browsers, the audio processing graph may be suspended or
+      // garbage-collected if there's no path to the destination. Connecting
+      // through a zero-gain node keeps the graph alive without producing output.
       this.sourceNode.connect(this.audioWorkletNode);
-      // Note: We don't connect to audioContext.destination to avoid feedback
+      this.silentGainNode = this.audioContext.createGain();
+      this.silentGainNode.gain.value = 0;
+      this.audioWorkletNode.connect(this.silentGainNode);
+      this.silentGainNode.connect(this.audioContext.destination);
 
       this.isRecording = true;
-      console.log('Recording started (PCM mode)');
+      console.log('Recording started (PCM mode), actualSampleRate:', this.audioContext.sampleRate);
 
     } catch (error) {
       const err = error as Error;
@@ -157,10 +185,17 @@ export class MicrophoneCapture {
       if (this.sourceNode && this.audioWorkletNode) {
         this.sourceNode.disconnect(this.audioWorkletNode);
       }
+      if (this.audioWorkletNode && this.silentGainNode) {
+        this.audioWorkletNode.disconnect(this.silentGainNode);
+      }
+      if (this.silentGainNode) {
+        this.silentGainNode.disconnect();
+      }
 
       // Cleanup
       this.audioWorkletNode = null;
       this.sourceNode = null;
+      this.silentGainNode = null;
       this.isRecording = false;
 
       console.log('Recording stopped');
@@ -179,6 +214,12 @@ export class MicrophoneCapture {
     if (this.sourceNode && this.audioWorkletNode) {
       this.sourceNode.disconnect(this.audioWorkletNode);
     }
+    if (this.audioWorkletNode && this.silentGainNode) {
+      this.audioWorkletNode.disconnect(this.silentGainNode);
+    }
+    if (this.silentGainNode) {
+      this.silentGainNode.disconnect();
+    }
 
     // Stop microphone stream
     if (this.audioStream) {
@@ -195,6 +236,7 @@ export class MicrophoneCapture {
     this.audioContext = null;
     this.audioWorkletNode = null;
     this.sourceNode = null;
+    this.silentGainNode = null;
     this.isRecording = false;
     this.onChunkCallback = null;
     this.onErrorCallback = null;
@@ -235,5 +277,13 @@ export class MicrophoneCapture {
    */
   get stream(): MediaStream | null {
     return this.audioStream;
+  }
+
+  /**
+   * Get the actual sample rate used by the AudioContext.
+   * On Android Chrome, this may differ from the requested rate.
+   */
+  get actualSampleRate(): number {
+    return this.audioContext?.sampleRate ?? this.options.sampleRate;
   }
 }

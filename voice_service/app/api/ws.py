@@ -152,14 +152,21 @@ class ConnectionManager:
         logger.info(f"Audio streaming ended for session {session_id}")
         await self._trigger_processing_once(session_id, source="audio_end")
 
-    async def _process_audio(self, session_id: str, audio_data: bytes):
+    async def _process_audio(self, session_id: str, audio_data: bytes, audio_config: dict = None):
         """Process received audio through the pipeline"""
         try:
             # Import here to avoid circular dependency
             from app.pipeline.pipeline_runner import process_audio_stream
 
+            # Pass client-reported sample rate so the backend can resample if
+            # the browser's AudioContext used a different rate than 16kHz
+            # (common on Android Chrome which may use 44100 or 48000).
+            client_sample_rate = None
+            if audio_config:
+                client_sample_rate = audio_config.get("sample_rate")
+
             # Process the audio
-            await process_audio_stream(session_id, audio_data)
+            await process_audio_stream(session_id, audio_data, sample_rate=client_sample_rate)
 
         except Exception as e:
             logger.error(f"Error processing audio for session {session_id}: {e}", exc_info=True)
@@ -184,9 +191,11 @@ class ConnectionManager:
             self.processing_started[session_id] = True
 
             audio_data = None
+            audio_config = None
             if session_id in self.audio_buffers:
                 audio_data = self.audio_buffers[session_id].get_audio_data()
-                logger.info(f"Triggering processing from {source}, bytes={len(audio_data)}")
+                audio_config = self.audio_buffers[session_id].config
+                logger.info(f"Triggering processing from {source}, bytes={len(audio_data)}, config={audio_config}")
             else:
                 logger.warning(f"No audio buffer for session {session_id}")
 
@@ -196,7 +205,7 @@ class ConnectionManager:
         await self.broadcast_state(session_id, SessionStatus.PROCESSING)
 
         if audio_data:
-            asyncio.create_task(self._process_audio(session_id, audio_data))
+            asyncio.create_task(self._process_audio(session_id, audio_data, audio_config))
         else:
             await self.broadcast_error(
                 session_id,

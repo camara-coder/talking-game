@@ -257,13 +257,15 @@ def get_pipeline_runner() -> PipelineRunner:
     return _runner_instance
 
 
-async def process_audio_stream(session_id: str, audio_data: bytes):
+async def process_audio_stream(session_id: str, audio_data: bytes, sample_rate: int = None):
     """
     Process audio received from WebSocket stream
 
     Args:
         session_id: Session ID
         audio_data: Raw PCM16 audio bytes from browser AudioWorklet
+        sample_rate: Actual sample rate from the client's AudioContext.
+                     On Android Chrome this may be 44100 or 48000 instead of 16000.
     """
     logger.info(f"Processing audio stream for session {session_id}: {len(audio_data)} bytes")
 
@@ -275,10 +277,24 @@ async def process_audio_stream(session_id: str, audio_data: bytes):
         # Convert PCM16 to float32 in range [-1.0, 1.0]
         audio = pcm16_data.astype(np.float32) / 32768.0
 
-        # Sample rate matches what AudioWorklet was configured with (16kHz)
-        sample_rate = settings.AUDIO_SAMPLE_RATE
+        # Use client-reported sample rate if available, otherwise fall back to config.
+        # Android Chrome may capture at 44100/48000Hz instead of the requested 16kHz.
+        if sample_rate is None:
+            sample_rate = settings.AUDIO_SAMPLE_RATE
 
         logger.info(f"Converted PCM audio: {len(audio)} samples at {sample_rate}Hz")
+
+        # Resample to 16kHz if needed. The pipeline processors (Silero VAD, noise
+        # reducer) are initialized at 16kHz and cannot handle other rates. Android
+        # Chrome often captures at 44100 or 48000Hz when the AudioContext can't use
+        # the requested 16kHz rate.
+        target_rate = settings.AUDIO_SAMPLE_RATE
+        if sample_rate != target_rate:
+            logger.info(f"Resampling audio from {sample_rate}Hz to {target_rate}Hz for pipeline")
+            from app.utils.audio_io import resample_audio
+            audio = resample_audio(audio, sample_rate, target_rate)
+            sample_rate = target_rate
+            logger.info(f"Resampled audio: {len(audio)} samples at {sample_rate}Hz")
 
         # Process through pipeline
         runner = get_pipeline_runner()
