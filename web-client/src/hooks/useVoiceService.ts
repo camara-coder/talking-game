@@ -190,16 +190,17 @@ export function useVoiceService(): UseVoiceServiceResult {
         await ws.connect(sessionId);
       }
 
-      // Send audio configuration
+      // Send audio configuration with the actual sample rate from the AudioContext.
+      // On Android Chrome, the browser may use the device's native rate (e.g. 48kHz)
+      // instead of the requested 16kHz. The backend will resample if needed.
+      const microphone = microphoneRef.current;
       await ws.sendAudioStart({
-        sample_rate: 16000,
+        sample_rate: microphone.actualSampleRate,
         channels: 1,
-        format: 'pcm16', // Changed from 'webm' to 'pcm16' for AudioWorklet
+        format: 'pcm16',
       });
 
       // Setup microphone to stream audio chunks
-      const microphone = microphoneRef.current;
-
       microphone.onChunk(async (chunk: ArrayBuffer) => {
         try {
           await ws.sendAudioChunk(chunk);
