@@ -139,11 +139,11 @@ class PipelineRunner:
             if audio_path:
                 session.current_turn.audio_path = audio_path
 
-            # Get actual audio duration and sample rate
-            from app.utils.wav_utils import get_wav_info
-            wav_info = await asyncio.to_thread(get_wav_info, audio_path)
-            duration_ms = int(wav_info.get("duration", 0.0) * 1000)
-            sample_rate_hz = wav_info.get("sample_rate", settings.TTS_SAMPLE_RATE)
+                # Get actual audio duration and sample rate
+                from app.utils.wav_utils import get_wav_info
+                wav_info = await asyncio.to_thread(get_wav_info, audio_path)
+                duration_ms = int(wav_info.get("duration", 0.0) * 1000)
+                sample_rate_hz = wav_info.get("sample_rate", settings.TTS_SAMPLE_RATE)
 
                 # Broadcast audio ready
                 # Use PUBLIC_URL if set (for production), otherwise use local URL
@@ -165,6 +165,19 @@ class PipelineRunner:
                     turn_id
                 )
                 session.status = SessionStatus.SPEAKING
+            else:
+                logger.error("TTS synthesis failed: no audio generated")
+                await connection_manager.broadcast_error(
+                    session_id,
+                    "TTS_ERROR",
+                    "Failed to synthesize response audio",
+                    turn_id
+                )
+                await connection_manager.broadcast_state(
+                    session_id,
+                    SessionStatus.IDLE,
+                    turn_id
+                )
 
             # Complete turn
             session.complete_turn()
