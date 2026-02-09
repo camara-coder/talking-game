@@ -139,10 +139,11 @@ class PipelineRunner:
             if audio_path:
                 session.current_turn.audio_path = audio_path
 
-                # Get actual audio duration
-                from app.utils.wav_utils import get_wav_duration
-                duration_sec = await asyncio.to_thread(get_wav_duration, audio_path)
-                duration_ms = int(duration_sec * 1000)
+            # Get actual audio duration and sample rate
+            from app.utils.wav_utils import get_wav_info
+            wav_info = await asyncio.to_thread(get_wav_info, audio_path)
+            duration_ms = int(wav_info.get("duration", 0.0) * 1000)
+            sample_rate_hz = wav_info.get("sample_rate", settings.TTS_SAMPLE_RATE)
 
                 # Broadcast audio ready
                 # Use PUBLIC_URL if set (for production), otherwise use local URL
@@ -153,7 +154,8 @@ class PipelineRunner:
                     session_id,
                     turn_id,
                     audio_url,
-                    duration_ms=duration_ms
+                    duration_ms=duration_ms,
+                    sample_rate_hz=sample_rate_hz,
                 )
 
                 # Update state to speaking
@@ -221,12 +223,11 @@ class PipelineRunner:
 
             audio_path = os.path.join(audio_dir, f"{turn_id}.wav")
 
-            # Import TTS processor (ElevenLabs for high-quality cloud TTS)
-            from app.pipeline.processors.tts_elevenlabs import ElevenLabsTTSProcessor
+            # Import TTS processor (Qwen3-TTS local)
+            from app.pipeline.processors.tts_qwen3 import Qwen3TTSProcessor
 
-            # Create TTS processor (will be cached in future)
-            # Using Rachel - clear, friendly female voice for kids
-            tts = ElevenLabsTTSProcessor(voice=settings.ELEVENLABS_VOICE)
+            # Create TTS processor (model cached globally)
+            tts = Qwen3TTSProcessor()
 
             # Synthesize speech (run in thread pool as it's CPU-intensive)
             success = await asyncio.to_thread(tts.synthesize, text, audio_path)

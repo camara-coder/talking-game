@@ -29,6 +29,9 @@ httpx>=0.28.0
 # TTS - ElevenLabs (cloud-based high-quality neural TTS)
 elevenlabs>=1.0.0
 
+# TTS - Qwen3-TTS (local open-source TTS)
+qwen-tts>=0.1.0
+
 # TTS - Alternative options (commented out)
 # kokoro-onnx>=0.4.9  # Kokoro TTS with ONNX runtime (local, CPU-intensive)
 # pyttsx3>=2.90  # Windows TTS (for local dev)

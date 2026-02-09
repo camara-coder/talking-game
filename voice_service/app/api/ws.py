@@ -354,9 +354,12 @@ class ConnectionManager:
         session_id: str,
         turn_id: str,
         url: str,
-        duration_ms: int = 0
+        duration_ms: int = 0,
+        sample_rate_hz: int = None
     ):
         """Helper to broadcast audio ready event"""
+        if sample_rate_hz is None:
+            sample_rate_hz = settings.TTS_SAMPLE_RATE
         event = WebSocketEvent(
             type=EventType.REPLY_AUDIO_READY,
             session_id=session_id,
@@ -365,7 +368,7 @@ class ConnectionManager:
                 "url": url,
                 "duration_ms": duration_ms,
                 "format": "wav",
-                "sample_rate_hz": settings.TTS_SAMPLE_RATE,
+                "sample_rate_hz": sample_rate_hz,
                 "channels": settings.TTS_CHANNELS
             }
         )

@@ -36,9 +36,18 @@ class Settings(BaseSettings):
     # ElevenLabs Configuration
     ELEVENLABS_API_KEY: str = ""  # Set via environment variable
 
-    # ElevenLabs TTS
+    # ElevenLabs TTS (legacy, replaced by Qwen3-TTS)
     ELEVENLABS_VOICE: str = "tapn1QwocNXk3viVSowa"  # Selected voice
     ELEVENLABS_MODEL: str = "eleven_monolingual_v1"  # or eleven_multilingual_v2
+
+    # Qwen3-TTS Configuration (local)
+    QWEN_TTS_MODEL_ID: str = "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice"
+    QWEN_TTS_DEVICE: str = "cpu"  # "cpu" or "cuda"
+    QWEN_TTS_DTYPE: str = "float32"  # "float32", "float16", "bfloat16"
+    QWEN_TTS_ATTN_IMPL: str = ""  # Optional: "flash_attention_2" on compatible GPUs
+    QWEN_TTS_LANGUAGE: str = "Auto"
+    QWEN_TTS_SPEAKER: str = "Auto"
+    QWEN_TTS_INSTRUCTION: str = "Warm, friendly voice for a young child."
 
     # ElevenLabs STT (Scribe)
     ELEVENLABS_STT_MODEL: str = "scribe_v1"  # ElevenLabs Scribe model
