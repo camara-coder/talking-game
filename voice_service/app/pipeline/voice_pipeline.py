@@ -9,7 +9,7 @@ import time
 
 from app.pipeline.processors.noise_reducer import NoiseReducer
 from app.pipeline.processors.vad_silero import SileroVADProcessor as VADProcessor
-from app.pipeline.processors.stt_elevenlabs import ElevenLabsSTTProcessor as STTProcessor
+from app.pipeline.processors.stt_canary_qwen import CanaryQwenSTTProcessor as STTProcessor
 from app.pipeline.processors.skills_router import SkillsRouterProcessor
 from app.pipeline.processors.llm_ollama import OllamaLLMProcessor
 from app.pipeline.processors.response_shaper import ResponseShaperProcessor
