@@ -57,6 +57,8 @@ class Settings(BaseSettings):
 
     # Streaming VAD endpointing
     STREAMING_VAD_ENABLED: bool = True  # Set to False to disable endpointing
+    ENDPOINT_CONFIRM_MS: int = 450  # Silence confirmation before triggering (ms)
+    ENDPOINT_POST_ROLL_MS: int = 200  # Audio kept after end (ms)
 
     # Noise Reduction Configuration
     NOISE_REDUCE_PROP_DECREASE: float = 0.6  # Reduction strength (0.0-1.0)

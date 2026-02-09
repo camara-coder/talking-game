@@ -2,7 +2,7 @@
 WebSocket manager and endpoints for real-time event streaming and audio upload
 """
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
-from typing import Dict, Set
+from typing import Dict, Set, Optional
 import logging
 import json
 import asyncio
@@ -41,6 +41,16 @@ class AudioBuffer:
         """Get all buffered audio as bytes"""
         return b''.join(self.chunks)
 
+    def get_audio_data_up_to_samples(self, max_samples: int) -> bytes:
+        """Get buffered audio up to max_samples (PCM16 => 2 bytes per sample)."""
+        if max_samples <= 0:
+            return b""
+        max_bytes = max_samples * 2
+        data = self.get_audio_data()
+        if len(data) <= max_bytes:
+            return data
+        return data[:max_bytes]
+
     def clear(self):
         """Clear the buffer"""
         self.chunks.clear()
@@ -60,6 +70,8 @@ class ConnectionManager:
         self.streaming_vad_states: Dict[str, StreamingVADState] = {}
         # Guard to ensure pipeline runs once per turn
         self.processing_started: Dict[str, bool] = {}
+        # Pending endpoint confirmation tasks
+        self.endpoint_tasks: Dict[str, asyncio.Task] = {}
         self._lock = asyncio.Lock()
 
     async def connect(self, websocket: WebSocket, session_id: str):
@@ -93,6 +105,9 @@ class ConnectionManager:
                 del self.streaming_vad_states[session_id]
             if session_id in self.processing_started:
                 del self.processing_started[session_id]
+            if session_id in self.endpoint_tasks:
+                self.endpoint_tasks[session_id].cancel()
+                del self.endpoint_tasks[session_id]
 
         logger.info(f"WebSocket disconnected for session {session_id}")
 
@@ -134,6 +149,9 @@ class ConnectionManager:
     async def handle_audio_chunk(self, session_id: str, chunk: bytes):
         """Handle binary audio chunk"""
         async with self._lock:
+            if self.processing_started.get(session_id):
+                # Ignore late chunks after processing has started
+                return
             if session_id not in self.audio_buffers:
                 logger.warning(f"Received audio chunk for session {session_id} without audio.start")
                 # Create buffer if not exists
@@ -143,9 +161,12 @@ class ConnectionManager:
         # Run streaming endpointing outside the lock
         if settings.STREAMING_VAD_ENABLED:
             vad_state = self.streaming_vad_states.get(session_id)
-            if vad_state and not vad_state.endpoint_detected:
-                if vad_process_chunk(vad_state, chunk):
-                    await self._trigger_processing_once(session_id, source="vad_end")
+            if vad_state:
+                result = vad_process_chunk(vad_state, chunk)
+                if result.get("speech_resumed"):
+                    await self._cancel_endpoint_task(session_id)
+                if result.get("end_detected"):
+                    await self._schedule_endpoint_trigger(session_id)
 
     async def handle_audio_end(self, session_id: str):
         """Handle audio.end message and trigger processing"""
@@ -182,25 +203,41 @@ class ConnectionManager:
             async with self._lock:
                 if session_id in self.audio_buffers:
                     del self.audio_buffers[session_id]
+                if session_id in self.processing_started:
+                    del self.processing_started[session_id]
 
-    async def _trigger_processing_once(self, session_id: str, source: str):
+    async def _trigger_processing_once(
+        self,
+        session_id: str,
+        source: str,
+        audio_override: Optional[bytes] = None,
+        audio_config_override: Optional[dict] = None,
+    ):
         async with self._lock:
             if self.processing_started.get(session_id):
                 logger.info(f"Processing already started for {session_id} (source={source})")
                 return
             self.processing_started[session_id] = True
 
-            audio_data = None
-            audio_config = None
-            if session_id in self.audio_buffers:
-                audio_data = self.audio_buffers[session_id].get_audio_data()
-                audio_config = self.audio_buffers[session_id].config
-                logger.info(f"Triggering processing from {source}, bytes={len(audio_data)}, config={audio_config}")
-            else:
-                logger.warning(f"No audio buffer for session {session_id}")
+            audio_data = audio_override
+            audio_config = audio_config_override
+            if audio_data is None or audio_config is None:
+                if session_id in self.audio_buffers:
+                    if audio_data is None:
+                        audio_data = self.audio_buffers[session_id].get_audio_data()
+                    if audio_config is None:
+                        audio_config = self.audio_buffers[session_id].config
+                    logger.info(
+                        f"Triggering processing from {source}, bytes={len(audio_data)}, config={audio_config}"
+                    )
+                else:
+                    logger.warning(f"No audio buffer for session {session_id}")
 
             if session_id in self.streaming_vad_states:
                 del self.streaming_vad_states[session_id]
+            if session_id in self.endpoint_tasks:
+                self.endpoint_tasks[session_id].cancel()
+                del self.endpoint_tasks[session_id]
 
         await self.broadcast_state(session_id, SessionStatus.PROCESSING)
 
@@ -213,6 +250,50 @@ class ConnectionManager:
                 "No audio data received"
             )
             await self.broadcast_state(session_id, SessionStatus.IDLE)
+
+    async def _cancel_endpoint_task(self, session_id: str):
+        task = self.endpoint_tasks.get(session_id)
+        if task and not task.done():
+            task.cancel()
+            logger.info(f"Cancelled pending endpoint trigger for session {session_id}")
+        if session_id in self.endpoint_tasks:
+            del self.endpoint_tasks[session_id]
+
+    async def _schedule_endpoint_trigger(self, session_id: str):
+        if session_id in self.endpoint_tasks and not self.endpoint_tasks[session_id].done():
+            return
+
+        async def _endpoint_wait_and_trigger():
+            try:
+                await asyncio.sleep(settings.ENDPOINT_CONFIRM_MS / 1000.0)
+                async with self._lock:
+                    if self.processing_started.get(session_id):
+                        return
+                    vad_state = self.streaming_vad_states.get(session_id)
+                    if not vad_state or not vad_state.pending_endpoint:
+                        return
+                    end_sample = vad_state.last_end_sample or 0
+                    post_roll_samples = int(
+                        settings.AUDIO_SAMPLE_RATE * (settings.ENDPOINT_POST_ROLL_MS / 1000.0)
+                    )
+                    max_samples = end_sample + post_roll_samples
+                    audio_override = None
+                    audio_config = None
+                    if session_id in self.audio_buffers:
+                        audio_override = self.audio_buffers[session_id].get_audio_data_up_to_samples(
+                            max_samples
+                        )
+                        audio_config = self.audio_buffers[session_id].config
+                await self._trigger_processing_once(
+                    session_id,
+                    source="vad_end_confirmed",
+                    audio_override=audio_override,
+                    audio_config_override=audio_config,
+                )
+            except asyncio.CancelledError:
+                return
+
+        self.endpoint_tasks[session_id] = asyncio.create_task(_endpoint_wait_and_trigger())
 
     async def send_event(self, session_id: str, event: WebSocketEvent):
         """Send event to all connections for a session"""
