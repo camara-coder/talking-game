@@ -18,15 +18,16 @@ noisereduce>=3.0.0  # Server-side noise reduction (runs before VAD and STT)
 # Note: Audio conversion uses ffmpeg directly (no Python package needed)
 
 # Speech-to-Text
-# faster-whisper>=1.1.0  # Local STT (replaced by ElevenLabs Scribe)
-# openai>=2.0.0  # OpenAI Whisper API (replaced by ElevenLabs Scribe)
-# Now using ElevenLabs Scribe API (already installed via elevenlabs package)
+# Canary-Qwen-2.5B requires latest NeMo from git (per NVIDIA model card)
+nemo_toolkit[asr,tts] @ git+https://github.com/NVIDIA/NeMo.git
+# faster-whisper>=1.1.0  # Local STT (alternative)
+# openai>=2.0.0  # OpenAI Whisper API (alternative)
 
 # LLM Client
 requests>=2.32.0
 httpx>=0.28.0
 
-# TTS - ElevenLabs (cloud-based high-quality neural TTS)
+# TTS - ElevenLabs (legacy)
 elevenlabs>=1.0.0
 
 # TTS - Qwen3-TTS (local open-source TTS)

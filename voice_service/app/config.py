@@ -52,6 +52,15 @@ class Settings(BaseSettings):
     # ElevenLabs STT (Scribe)
     ELEVENLABS_STT_MODEL: str = "scribe_v1"  # ElevenLabs Scribe model
 
+    # Canary-Qwen STT Configuration (NeMo)
+    CANARY_QWEN_MODEL_ID: str = "nvidia/canary-qwen-2.5b"
+    CANARY_QWEN_DEVICE: str = "auto"  # "auto", "cpu", "cuda"
+    CANARY_QWEN_MAX_TOKENS: int = 256
+    CANARY_QWEN_TEMPERATURE: float = 0.1
+    CANARY_QWEN_TOP_P: float = 0.95
+    CANARY_QWEN_PROMPT: str = ""  # Optional override prompt, must include audio locator tag
+    CANARY_QWEN_STARTUP_LOAD: bool = True  # Load Canary model at startup for validation
+
     # VAD Configuration
     VAD_AGGRESSIVENESS: int = 2  # 0-3, higher = more aggressive
     VAD_PADDING_MS: int = 300  # Padding before/after speech

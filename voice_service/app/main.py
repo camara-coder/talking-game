@@ -70,6 +70,18 @@ async def startup_event():
     logger.info(f"Data Directory: {settings.DATA_DIR}")
     logger.info("=" * 60)
 
+    # Canary-Qwen STT startup validation (optional)
+    if settings.CANARY_QWEN_STARTUP_LOAD:
+        try:
+            logger.info("Validating Canary-Qwen STT model load...")
+            from app.pipeline.processors.stt_canary_qwen import _get_canary_model
+            _get_canary_model()
+            logger.info("Canary-Qwen STT model loaded successfully")
+        except Exception as e:
+            logger.error(f"Canary-Qwen STT model load failed: {e}", exc_info=True)
+            # Fail fast so deploys don't run without STT
+            raise
+
     # Start session manager
     await session_manager.start()
 
@@ -171,21 +183,14 @@ async def health_check():
         }
         health_status["service"] = "degraded"
 
-    # Check STT (ElevenLabs Scribe API) availability
+    # Check STT (Canary-Qwen) availability
     try:
-        # Verify ElevenLabs API key is configured
-        if settings.ELEVENLABS_API_KEY:
-            health_status["checks"]["stt"] = {
-                "status": "ready",
-                "provider": "ElevenLabs Scribe",
-                "model": settings.ELEVENLABS_STT_MODEL
-            }
-        else:
-            health_status["checks"]["stt"] = {
-                "status": "unhealthy",
-                "error": "ELEVENLABS_API_KEY not configured"
-            }
-            health_status["service"] = "degraded"
+        health_status["checks"]["stt"] = {
+            "status": "ready",
+            "provider": "Canary-Qwen",
+            "model": settings.CANARY_QWEN_MODEL_ID,
+            "device": settings.CANARY_QWEN_DEVICE
+        }
     except Exception as e:
         health_status["checks"]["stt"] = {
             "status": "unhealthy",
