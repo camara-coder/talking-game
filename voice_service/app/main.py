@@ -65,13 +65,15 @@ async def startup_event():
     logger.info(f"Service URL: http://{settings.SERVICE_HOST}:{settings.SERVICE_PORT}")
     logger.info(f"WebSocket URL: ws://{settings.SERVICE_HOST}:{settings.SERVICE_PORT}/ws")
     logger.info(f"Ollama URL: {settings.OLLAMA_BASE_URL}")
-    logger.info(f"STT Model: {settings.STT_MODEL_SIZE}")
+    logger.info(f"STT Engine: {settings.STT_ENGINE}")
+    logger.info(f"TTS Engine: {settings.TTS_ENGINE}")
     logger.info(f"LLM Model: {settings.OLLAMA_MODEL}")
     logger.info(f"Data Directory: {settings.DATA_DIR}")
     logger.info("=" * 60)
 
-    # Canary-Qwen STT startup validation (optional)
-    if settings.CANARY_QWEN_STARTUP_LOAD:
+    # STT startup validation (engine-aware)
+    stt_engine = settings.STT_ENGINE.lower()
+    if stt_engine == "canary-qwen" and settings.CANARY_QWEN_STARTUP_LOAD:
         try:
             logger.info("Validating Canary-Qwen STT model load...")
             from app.pipeline.processors.stt_canary_qwen import _get_canary_model
@@ -79,7 +81,15 @@ async def startup_event():
             logger.info("Canary-Qwen STT model loaded successfully")
         except Exception as e:
             logger.error(f"Canary-Qwen STT model load failed: {e}", exc_info=True)
-            # Fail fast so deploys don't run without STT
+            raise
+    elif stt_engine == "moonshine" and settings.MOONSHINE_STARTUP_LOAD:
+        try:
+            logger.info("Validating Moonshine STT model load...")
+            from app.pipeline.processors.stt_moonshine import _get_moonshine_transcriber
+            _get_moonshine_transcriber()
+            logger.info("Moonshine STT model loaded successfully")
+        except Exception as e:
+            logger.error(f"Moonshine STT model load failed: {e}", exc_info=True)
             raise
 
     # Start session manager
@@ -183,16 +193,56 @@ async def health_check():
         }
         health_status["service"] = "degraded"
 
-    # Check STT (Canary-Qwen) availability
+    # Check STT availability (engine-aware)
     try:
-        health_status["checks"]["stt"] = {
-            "status": "ready",
-            "provider": "Canary-Qwen",
-            "model": settings.CANARY_QWEN_MODEL_ID,
-            "device": settings.CANARY_QWEN_DEVICE
-        }
+        stt_engine = settings.STT_ENGINE.lower()
+        if stt_engine == "canary-qwen":
+            health_status["checks"]["stt"] = {
+                "status": "ready",
+                "engine": "canary-qwen",
+                "model": settings.CANARY_QWEN_MODEL_ID,
+                "device": settings.CANARY_QWEN_DEVICE
+            }
+        elif stt_engine == "moonshine":
+            health_status["checks"]["stt"] = {
+                "status": "ready",
+                "engine": "moonshine",
+                "model": settings.MOONSHINE_MODEL_NAME,
+            }
+        else:
+            health_status["checks"]["stt"] = {
+                "status": "unknown",
+                "engine": stt_engine,
+            }
     except Exception as e:
         health_status["checks"]["stt"] = {
+            "status": "unhealthy",
+            "error": str(e)
+        }
+        health_status["service"] = "degraded"
+
+    # Check TTS availability (engine-aware)
+    try:
+        tts_engine = settings.TTS_ENGINE.lower()
+        if tts_engine == "qwen3":
+            health_status["checks"]["tts"] = {
+                "status": "ready",
+                "engine": "qwen3",
+                "model": settings.QWEN_TTS_MODEL_ID,
+            }
+        elif tts_engine == "pocket":
+            health_status["checks"]["tts"] = {
+                "status": "ready",
+                "engine": "pocket",
+                "voice": settings.POCKET_TTS_VOICE,
+            }
+        else:
+            health_status["checks"]["tts"] = {
+                "status": "unknown",
+                "engine": tts_engine,
+            }
+    except Exception as e:
+        health_status["checks"]["tts"] = {
             "status": "unhealthy",
             "error": str(e)
         }

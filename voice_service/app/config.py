@@ -18,6 +18,12 @@ class Settings(BaseSettings):
     # Example: https://your-app.up.railway.app
     PUBLIC_URL: str = ""  # If empty, uses http://SERVICE_HOST:SERVICE_PORT
 
+    # Engine Selection — choose which STT and TTS backend to use
+    # STT options: "canary-qwen", "moonshine"
+    STT_ENGINE: str = "moonshine"
+    # TTS options: "qwen3", "pocket"
+    TTS_ENGINE: str = "pocket"
+
     # Ollama Configuration
     OLLAMA_BASE_URL: str = "http://127.0.0.1:11434"
     OLLAMA_MODEL: str = "qwen2.5:0.5b-instruct"
@@ -60,6 +66,16 @@ class Settings(BaseSettings):
     CANARY_QWEN_TOP_P: float = 0.95
     CANARY_QWEN_PROMPT: str = ""  # Optional override prompt, must include audio locator tag
     CANARY_QWEN_STARTUP_LOAD: bool = True  # Load Canary model at startup for validation
+
+    # Moonshine STT Configuration (lightweight, CPU-optimized)
+    # Model options: "moonshine/tiny", "moonshine/small", "moonshine/medium"
+    MOONSHINE_MODEL_NAME: str = "moonshine/tiny"
+    MOONSHINE_STARTUP_LOAD: bool = True  # Load model at startup for validation
+
+    # Pocket-TTS Configuration (lightweight, CPU-optimized)
+    # Built-in voices: alba, marius, javert, jean, fantine, cosette, eponine, azelma
+    # Can also be a path to a WAV file for voice cloning
+    POCKET_TTS_VOICE: str = "alba"
 
     # VAD Configuration
     VAD_AGGRESSIVENESS: int = 2  # 0-3, higher = more aggressive

@@ -18,6 +18,22 @@ from app.utils.audio_io import save_wav
 logger = logging.getLogger(__name__)
 
 
+def _create_tts_processor():
+    """Create TTS processor based on configured engine."""
+    engine = settings.TTS_ENGINE.lower()
+    if engine == "pocket":
+        from app.pipeline.processors.tts_pocket import PocketTTSProcessor
+        return PocketTTSProcessor()
+    elif engine == "qwen3":
+        from app.pipeline.processors.tts_qwen3 import Qwen3TTSProcessor
+        return Qwen3TTSProcessor()
+    else:
+        raise ValueError(
+            f"Unknown TTS_ENGINE '{engine}'. "
+            f"Supported: 'qwen3', 'pocket'"
+        )
+
+
 class PipelineRunner:
     """Runs voice pipeline and broadcasts events"""
 
@@ -236,11 +252,8 @@ class PipelineRunner:
 
             audio_path = os.path.join(audio_dir, f"{turn_id}.wav")
 
-            # Import TTS processor (Qwen3-TTS local)
-            from app.pipeline.processors.tts_qwen3 import Qwen3TTSProcessor
-
-            # Create TTS processor (model cached globally)
-            tts = Qwen3TTSProcessor()
+            # Create TTS processor based on configured engine (model cached globally)
+            tts = _create_tts_processor()
 
             # Synthesize speech (run in thread pool as it's CPU-intensive)
             success = await asyncio.to_thread(tts.synthesize, text, audio_path)
