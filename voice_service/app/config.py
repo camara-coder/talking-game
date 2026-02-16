@@ -68,8 +68,8 @@ class Settings(BaseSettings):
     CANARY_QWEN_STARTUP_LOAD: bool = True  # Load Canary model at startup for validation
 
     # Moonshine STT Configuration (lightweight, CPU-optimized)
-    # Model options: "moonshine/tiny", "moonshine/small", "moonshine/medium"
-    MOONSHINE_MODEL_NAME: str = "moonshine/tiny"
+    # Model options: "tiny", "base", "tiny-streaming", "small-streaming", "medium-streaming"
+    MOONSHINE_MODEL_NAME: str = "tiny"
     MOONSHINE_STARTUP_LOAD: bool = True  # Load model at startup for validation
 
     # Pocket-TTS Configuration (lightweight, CPU-optimized)

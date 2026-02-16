@@ -19,7 +19,7 @@ noisereduce>=3.0.0  # Server-side noise reduction (runs before VAD and STT)
 
 # Speech-to-Text (select via STT_ENGINE env var)
 # Moonshine — lightweight CPU-optimized STT (default)
-moonshine-voice>=1.0.0
+moonshine-voice>=0.0.48
 # Canary-Qwen-2.5B — high-accuracy STT, requires NeMo (set STT_ENGINE=canary-qwen)
 nemo_toolkit[asr,tts] @ git+https://github.com/NVIDIA/NeMo.git
 # faster-whisper>=1.1.0  # Local STT (alternative)
