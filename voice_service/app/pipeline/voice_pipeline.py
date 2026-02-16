@@ -9,13 +9,30 @@ import time
 
 from app.pipeline.processors.noise_reducer import NoiseReducer
 from app.pipeline.processors.vad_silero import SileroVADProcessor as VADProcessor
-from app.pipeline.processors.stt_canary_qwen import CanaryQwenSTTProcessor as STTProcessor
 from app.pipeline.processors.skills_router import SkillsRouterProcessor
 from app.pipeline.processors.llm_ollama import OllamaLLMProcessor
 from app.pipeline.processors.response_shaper import ResponseShaperProcessor
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+def _create_stt_processor():
+    """Create STT processor based on configured engine."""
+    engine = settings.STT_ENGINE.lower()
+    if engine == "moonshine":
+        from app.pipeline.processors.stt_moonshine import MoonshineSTTProcessor
+        logger.info("Using Moonshine STT engine")
+        return MoonshineSTTProcessor()
+    elif engine == "canary-qwen":
+        from app.pipeline.processors.stt_canary_qwen import CanaryQwenSTTProcessor
+        logger.info("Using Canary-Qwen STT engine")
+        return CanaryQwenSTTProcessor()
+    else:
+        raise ValueError(
+            f"Unknown STT_ENGINE '{engine}'. "
+            f"Supported: 'canary-qwen', 'moonshine'"
+        )
 
 
 class VoicePipeline:
@@ -28,7 +45,7 @@ class VoicePipeline:
         # Initialize processors
         self.noise_reducer = NoiseReducer()
         self.vad = VADProcessor()
-        self.stt = STTProcessor()
+        self.stt = _create_stt_processor()
         self.skills_router = SkillsRouterProcessor()
         self.llm = OllamaLLMProcessor()
         self.response_shaper = ResponseShaperProcessor()
