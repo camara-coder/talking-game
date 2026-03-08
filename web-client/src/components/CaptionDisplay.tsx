@@ -3,11 +3,13 @@ import React from 'react';
 interface CaptionDisplayProps {
   transcript: string;
   replyText: string;
+  catName?: string;
 }
 
 export const CaptionDisplay: React.FC<CaptionDisplayProps> = ({
   transcript,
   replyText,
+  catName = 'Whiskers',
 }) => {
   return (
     <div className="caption-display">
@@ -19,7 +21,7 @@ export const CaptionDisplay: React.FC<CaptionDisplayProps> = ({
       )}
       {replyText && (
         <div className="reply-box">
-          <div className="caption-label">Character says:</div>
+          <div className="caption-label">🐱 {catName} says:</div>
           <div className="caption-text">{replyText}</div>
         </div>
       )}

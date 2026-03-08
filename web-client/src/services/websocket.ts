@@ -5,6 +5,10 @@ import type {
   ReplyTextPayload,
   AudioReadyPayload,
   ErrorPayload,
+  CatSoundPayload,
+  CatProactivePayload,
+  CatMoodChangePayload,
+  CatStatePayload,
 } from '../types';
 
 export type EventCallback<T = any> = (payload: T) => void;
@@ -228,6 +232,11 @@ export class VoiceWebSocketClient {
   on(eventType: 'reply.text', callback: EventCallback<ReplyTextPayload>): void;
   on(eventType: 'reply.audio_ready', callback: EventCallback<AudioReadyPayload>): void;
   on(eventType: 'error', callback: EventCallback<ErrorPayload>): void;
+  // Cat events
+  on(eventType: 'cat.sound', callback: EventCallback<CatSoundPayload>): void;
+  on(eventType: 'cat.proactive', callback: EventCallback<CatProactivePayload>): void;
+  on(eventType: 'cat.mood_change', callback: EventCallback<CatMoodChangePayload>): void;
+  on(eventType: 'cat.state', callback: EventCallback<CatStatePayload>): void;
   on(eventType: string, callback: EventCallback): void {
     if (!this.eventHandlers.has(eventType)) {
       this.eventHandlers.set(eventType, []);

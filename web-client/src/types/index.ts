@@ -1,5 +1,8 @@
-// Game states (matches backend SessionStatus)
-export type GameState = 'idle' | 'listening' | 'processing' | 'speaking';
+// Game states (matches backend SessionStatus + cat states)
+export type GameState = 'idle' | 'listening' | 'processing' | 'speaking' | 'silly' | 'sleeping';
+
+// Cat mood states
+export type CatMood = 'happy' | 'bored' | 'curious' | 'sleepy';
 
 // WebSocket event types
 export type EventType =
@@ -8,7 +11,11 @@ export type EventType =
   | 'transcript.final'
   | 'reply.text'
   | 'reply.audio_ready'
-  | 'error';
+  | 'error'
+  | 'cat.sound'
+  | 'cat.proactive'
+  | 'cat.mood_change'
+  | 'cat.state';
 
 // WebSocket event payload
 export interface WebSocketEvent {
@@ -72,4 +79,25 @@ export interface SessionStopRequest {
 export interface SessionStopResponse {
   session_id: string;
   status: string;
+}
+
+// Cat event payloads
+export interface CatSoundPayload {
+  sound_name: string;
+  mood: CatMood;
+}
+
+export interface CatProactivePayload {
+  text: string;
+  audio_url: string;
+  duration_ms: number;
+  mood: CatMood;
+}
+
+export interface CatMoodChangePayload {
+  mood: CatMood;
+}
+
+export interface CatStatePayload {
+  state: string;
 }

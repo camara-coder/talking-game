@@ -8,6 +8,8 @@ from datetime import datetime, timedelta
 
 from app.api.models import Session, SessionStatus, Turn
 from app.config import settings
+from app.personality.cat_mood import MoodManager
+from app.personality.proactive_engine import ProactiveEngine
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +19,8 @@ class SessionManager:
 
     def __init__(self):
         self.sessions: Dict[str, Session] = {}
+        self.mood_managers: Dict[str, MoodManager] = {}
+        self.proactive_engines: Dict[str, ProactiveEngine] = {}
         self._cleanup_task: Optional[asyncio.Task] = None
         self._db_enabled = settings.ENABLE_DB_PERSISTENCE
         logger.info(f"Database persistence: {'enabled' if self._db_enabled else 'disabled'}")
@@ -49,7 +53,15 @@ class SessionManager:
             self._remove_oldest_idle_session()
 
         self.sessions[session.session_id] = session
-        logger.info(f"Session created: {session.session_id}")
+
+        # Attach mood manager + start proactive engine
+        mood_manager = MoodManager()
+        self.mood_managers[session.session_id] = mood_manager
+        engine = ProactiveEngine(session.session_id, mood_manager)
+        self.proactive_engines[session.session_id] = engine
+        engine.start()
+
+        logger.info(f"Session created: {session.session_id} (cat engine started)")
 
         # Persist to database (async background task)
         if self._db_enabled:
@@ -61,9 +73,22 @@ class SessionManager:
         """Get session by ID"""
         return self.sessions.get(session_id)
 
+    def get_mood_manager(self, session_id: str) -> Optional[MoodManager]:
+        """Get MoodManager for a session."""
+        return self.mood_managers.get(session_id)
+
+    def get_proactive_engine(self, session_id: str) -> Optional[ProactiveEngine]:
+        """Get ProactiveEngine for a session."""
+        return self.proactive_engines.get(session_id)
+
     def delete_session(self, session_id: str) -> bool:
-        """Delete a session"""
+        """Delete a session and stop its cat engine."""
         if session_id in self.sessions:
+            # Stop proactive engine
+            engine = self.proactive_engines.pop(session_id, None)
+            if engine:
+                engine.stop()
+            self.mood_managers.pop(session_id, None)
             del self.sessions[session_id]
             logger.info(f"Session deleted: {session_id}")
             return True

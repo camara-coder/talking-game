@@ -384,6 +384,54 @@ class ConnectionManager:
         )
         await self.send_event(session_id, event)
 
+    async def broadcast_cat_sound(self, session_id: str, sound_name: str, mood: str):
+        """Broadcast passive cat sound event (frontend synthesizes the sound)"""
+        event = WebSocketEvent(
+            type=EventType.CAT_SOUND,
+            session_id=session_id,
+            payload={"sound_name": sound_name, "mood": mood}
+        )
+        await self.send_event(session_id, event)
+
+    async def broadcast_cat_proactive(
+        self,
+        session_id: str,
+        text: str,
+        audio_url: str,
+        duration_ms: int,
+        mood: str,
+    ):
+        """Broadcast cat-initiated speech event"""
+        event = WebSocketEvent(
+            type=EventType.CAT_PROACTIVE,
+            session_id=session_id,
+            payload={
+                "text": text,
+                "audio_url": audio_url,
+                "duration_ms": duration_ms,
+                "mood": mood,
+            }
+        )
+        await self.send_event(session_id, event)
+
+    async def broadcast_cat_mood_change(self, session_id: str, mood: str):
+        """Broadcast cat mood change event"""
+        event = WebSocketEvent(
+            type=EventType.CAT_MOOD_CHANGE,
+            session_id=session_id,
+            payload={"mood": mood}
+        )
+        await self.send_event(session_id, event)
+
+    async def broadcast_cat_state(self, session_id: str, state: str):
+        """Broadcast cat behavioral state (idle, speaking, sleeping, etc.)"""
+        event = WebSocketEvent(
+            type=EventType.CAT_STATE,
+            session_id=session_id,
+            payload={"state": state}
+        )
+        await self.send_event(session_id, event)
+
 
 # Global connection manager instance
 connection_manager = ConnectionManager()

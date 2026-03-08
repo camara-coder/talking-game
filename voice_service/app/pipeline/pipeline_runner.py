@@ -74,6 +74,16 @@ class PipelineRunner:
 
         turn_id = session.current_turn.turn_id
 
+        # Pause the proactive engine while we process the user's turn
+        engine = session_manager.get_proactive_engine(session_id)
+        if engine:
+            engine.pause()
+
+        # Update mood on user interaction
+        mood_manager = session_manager.get_mood_manager(session_id)
+        if mood_manager:
+            mood_manager.on_user_interaction()
+
         try:
             logger.info(f"Processing audio for session {session_id}, turn {turn_id}")
 
@@ -88,13 +98,21 @@ class PipelineRunner:
             # Get conversation context
             context = session.get_context(num_turns=settings.LLM_CONTEXT_TURNS)
 
-            # Run pipeline (this is CPU-bound, but we'll run it in the event loop for now)
-            # In production, you might want to run this in a thread pool
+            # Build dynamic cat system prompt based on mood + response mode
+            system_prompt = None
+            if mood_manager:
+                from app.personality.cat_prompts import get_system_prompt, get_context_note
+                mode = mood_manager.get_response_mode()
+                system_prompt = get_system_prompt(mood_manager.current_mood, mode) + get_context_note(context)
+                logger.info(f"Cat mood={mood_manager.current_mood}, mode={mode}")
+
+            # Run pipeline (CPU-bound — runs in thread pool)
             result = await asyncio.to_thread(
                 self.pipeline.process,
                 audio,
                 sample_rate,
-                context
+                context,
+                system_prompt,
             )
 
             # Check for errors
@@ -227,6 +245,12 @@ class PipelineRunner:
 
             session.status = SessionStatus.ERROR
             return False
+
+        finally:
+            # Always resume the proactive engine after the turn is done
+            engine = session_manager.get_proactive_engine(session_id)
+            if engine:
+                engine.resume()
 
     async def _generate_audio_placeholder(
         self,

@@ -26,6 +26,11 @@ class EventType(str, Enum):
     REPLY_TEXT = "reply.text"
     REPLY_AUDIO_READY = "reply.audio_ready"
     ERROR = "error"
+    # Cat-specific events
+    CAT_SOUND = "cat.sound"
+    CAT_PROACTIVE = "cat.proactive"
+    CAT_MOOD_CHANGE = "cat.mood_change"
+    CAT_STATE = "cat.state"
 
 
 # Request Models
