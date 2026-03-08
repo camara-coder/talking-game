@@ -118,35 +118,28 @@ async def stop_session(request: SessionStopRequest, background_tasks: Background
         )
 
 
-@router.get("/audio/{session_id}/{turn_id}.wav")
-async def get_audio(session_id: str, turn_id: str):
+@router.get("/audio/{session_id}/{filename}")
+async def get_audio(session_id: str, filename: str):
     """
-    Serve synthesized audio file for a specific turn
+    Serve a synthesized audio WAV for a turn or proactive cat response.
+    Filenames: '{turn_id}.wav' or 'proactive_{id}.wav'
     """
     try:
-        # Construct audio file path
-        audio_path = os.path.join(
-            settings.AUDIO_DIR,
-            session_id,
-            f"{turn_id}.wav"
-        )
+        # Sanitize: only .wav, no path traversal
+        if not filename.endswith(".wav") or "/" in filename or ".." in filename:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid filename")
 
-        # Check if file exists
+        audio_path = os.path.join(settings.AUDIO_DIR, session_id, filename)
+
         if not os.path.exists(audio_path):
             logger.warning(f"Audio file not found: {audio_path}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Audio file not found for session {session_id}, turn {turn_id}"
+                detail=f"Audio not found: {session_id}/{filename}"
             )
 
-        logger.info(f"Serving audio file: {audio_path}")
-
-        # Serve the WAV file
-        return FileResponse(
-            audio_path,
-            media_type="audio/wav",
-            filename=f"{turn_id}.wav"
-        )
+        logger.info(f"Serving audio: {audio_path}")
+        return FileResponse(audio_path, media_type="audio/wav", filename=filename)
 
     except HTTPException:
         raise

@@ -56,7 +56,8 @@ class VoicePipeline:
         self,
         audio: np.ndarray,
         sample_rate: int = None,
-        context: list = None
+        context: list = None,
+        system_prompt: str = None,
     ) -> Dict[str, Any]:
         """
         Process audio through complete pipeline
@@ -65,6 +66,7 @@ class VoicePipeline:
             audio: Audio data as float32 numpy array
             sample_rate: Sample rate in Hz
             context: Conversation context (previous turns)
+            system_prompt: Optional override for the LLM system prompt
 
         Returns:
             Dictionary with:
@@ -132,7 +134,8 @@ class VoicePipeline:
                 logger.info("Step 5: LLM processing...")
                 llm_response = self.llm.generate(
                     prompt=transcript,
-                    context=context
+                    context=context,
+                    system_prompt=system_prompt,
                 )
 
                 if not llm_response:

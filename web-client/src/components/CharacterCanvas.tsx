@@ -1,27 +1,27 @@
 import React, { useEffect, useRef } from 'react';
-import { Character } from '../lib/character';
-import type { GameState } from '../types';
+import { CatCharacter } from '../lib/cat-character';
+import type { GameState, CatMood } from '../types';
 
 interface CharacterCanvasProps {
   gameState: GameState;
+  mood?: CatMood;
   width?: number;
   height?: number;
 }
 
 export const CharacterCanvas: React.FC<CharacterCanvasProps> = ({
   gameState,
+  mood = 'happy',
   width = 600,
   height = 400,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const characterRef = useRef<Character | null>(null);
+  const characterRef = useRef<CatCharacter | null>(null);
 
-  // Initialize character
   useEffect(() => {
     if (canvasRef.current && !characterRef.current) {
-      characterRef.current = new Character(canvasRef.current, width, height);
+      characterRef.current = new CatCharacter(canvasRef.current, width, height);
     }
-
     return () => {
       if (characterRef.current) {
         characterRef.current.destroy();
@@ -30,12 +30,13 @@ export const CharacterCanvas: React.FC<CharacterCanvasProps> = ({
     };
   }, [width, height]);
 
-  // Update character state
   useEffect(() => {
-    if (characterRef.current) {
-      characterRef.current.setState(gameState);
-    }
+    characterRef.current?.setState(gameState);
   }, [gameState]);
+
+  useEffect(() => {
+    characterRef.current?.setMood(mood);
+  }, [mood]);
 
   return <canvas ref={canvasRef} className="character-canvas" />;
 };

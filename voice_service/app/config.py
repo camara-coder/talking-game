@@ -139,6 +139,20 @@ class Settings(BaseSettings):
         "I can't help with that. Let's talk about something safe, like animals or math."
     )
 
+    # ── Cat Pet Configuration ──────────────────────────────────────
+    CAT_NAME: str = "Whiskers"
+    # Passive sound intervals (seconds)
+    CAT_PASSIVE_SOUND_MIN_S: float = 20.0
+    CAT_PASSIVE_SOUND_MAX_S: float = 40.0
+    # Proactive speech intervals per mood (seconds) — overridden by MoodManager
+    CAT_PROACTIVE_HAPPY_MIN_S: float = 45.0
+    CAT_PROACTIVE_HAPPY_MAX_S: float = 90.0
+    CAT_PROACTIVE_BORED_MIN_S: float = 20.0
+    CAT_PROACTIVE_BORED_MAX_S: float = 50.0
+    # Mood inactivity threshold (minutes) before happy → bored
+    CAT_BORED_THRESHOLD_MIN: float = 10.0
+    # ───────────────────────────────────────────────────────────────
+
     # File Storage
     DATA_DIR: str = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
     AUDIO_DIR: str = os.path.join(DATA_DIR, "audio")
