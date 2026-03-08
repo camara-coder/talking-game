@@ -171,6 +171,13 @@ class PipelineRunner:
             )
 
             if audio_path:
+                # Apply cat voice pitch shift (makes voice lighter + more playful)
+                if settings.CAT_VOICE_PITCH_SEMITONES != 0.0:
+                    from app.utils.audio_pitch import pitch_shift_wav_inplace
+                    await asyncio.to_thread(
+                        pitch_shift_wav_inplace, audio_path, settings.CAT_VOICE_PITCH_SEMITONES
+                    )
+
                 session.current_turn.audio_path = audio_path
 
                 # Get actual audio duration and sample rate

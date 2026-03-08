@@ -53,7 +53,10 @@ class Settings(BaseSettings):
     QWEN_TTS_ATTN_IMPL: str = ""  # Optional: "flash_attention_2" on compatible GPUs
     QWEN_TTS_LANGUAGE: str = "Auto"
     QWEN_TTS_SPEAKER: str = "Auto"
-    QWEN_TTS_INSTRUCTION: str = "Warm, friendly voice for a young child."
+    QWEN_TTS_INSTRUCTION: str = (
+        "High-pitched, playful, light voice. Sounds like a cheerful talking cat from a cartoon. "
+        "Energetic and silly, childlike and fun."
+    )
 
     # ElevenLabs STT (Scribe)
     ELEVENLABS_STT_MODEL: str = "scribe_v1"  # ElevenLabs Scribe model
@@ -74,8 +77,9 @@ class Settings(BaseSettings):
 
     # Pocket-TTS Configuration (lightweight, CPU-optimized)
     # Built-in voices: alba, marius, javert, jean, fantine, cosette, eponine, azelma
-    # Can also be a path to a WAV file for voice cloning
-    POCKET_TTS_VOICE: str = "alba"
+    # "cosette" and "azelma" are the lightest/highest voices (younger characters).
+    # Can also be a path to a WAV file for voice cloning.
+    POCKET_TTS_VOICE: str = "cosette"
 
     # VAD Configuration
     VAD_AGGRESSIVENESS: int = 2  # 0-3, higher = more aggressive
@@ -141,6 +145,10 @@ class Settings(BaseSettings):
 
     # ── Cat Pet Configuration ──────────────────────────────────────
     CAT_NAME: str = "Whiskers"
+    # Pitch shift applied to ALL cat TTS output (semitones, positive = higher).
+    # +5 turns a typical adult voice into a light, cartoon-cat-appropriate voice.
+    # Set to 0.0 to disable. Range 0–8 is recommended; >8 sounds chipmunk-like.
+    CAT_VOICE_PITCH_SEMITONES: float = 5.0
     # Passive sound intervals (seconds)
     CAT_PASSIVE_SOUND_MIN_S: float = 20.0
     CAT_PASSIVE_SOUND_MAX_S: float = 40.0

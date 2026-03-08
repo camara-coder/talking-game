@@ -162,6 +162,13 @@ class ProactiveEngine:
                 await self._broadcast_cat_state("idle")
                 return
 
+            # Apply cat voice pitch shift
+            if settings.CAT_VOICE_PITCH_SEMITONES != 0.0:
+                from app.utils.audio_pitch import pitch_shift_wav_inplace
+                await asyncio.to_thread(
+                    pitch_shift_wav_inplace, audio_path, settings.CAT_VOICE_PITCH_SEMITONES
+                )
+
             # Get duration
             from app.utils.wav_utils import get_wav_info
             wav_info = await asyncio.to_thread(get_wav_info, audio_path)
