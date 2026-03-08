@@ -33,15 +33,18 @@ httpx>=0.28.0
 elevenlabs>=1.0.0
 
 # TTS (select via TTS_ENGINE env var)
-# Pocket-TTS — ultra-lightweight 100M-param CPU TTS (default)
+# Pocket-TTS — ultra-lightweight 100M-param CPU TTS (default, TTS_ENGINE=pocket)
 pocket-tts>=0.1.0
-# Qwen3-TTS — higher quality but heavier TTS (set TTS_ENGINE=qwen3)
+# Qwen3-TTS — higher quality, instruction-controlled voice (TTS_ENGINE=qwen3)
 qwen-tts>=0.1.0
+# Edge TTS — FREE Microsoft neural cloud TTS, best free voice quality (TTS_ENGINE=edge)
+#   Requires internet + ffmpeg (already a project dependency).
+#   Voices: en-US-AnaNeural (child), en-US-AriaNeural, en-GB-MaisieNeural
+edge-tts>=6.1.9
 
 # TTS - Alternative options (commented out)
 # kokoro-onnx>=0.4.9  # Kokoro TTS with ONNX runtime (local, CPU-intensive)
 # pyttsx3>=2.90  # Windows TTS (for local dev)
-# edge-tts>=6.1.9  # Microsoft Edge TTS (for cloud deployment)
 # comtypes>=1.4.0  # Required for pyttsx3 on Windows
 
 # Utilities

@@ -21,7 +21,11 @@ class Settings(BaseSettings):
     # Engine Selection — choose which STT and TTS backend to use
     # STT options: "canary-qwen", "moonshine"
     STT_ENGINE: str = "moonshine"
-    # TTS options: "qwen3", "pocket"
+    # TTS options: "pocket" | "qwen3" | "edge" | "elevenlabs"
+    #   pocket     — ultra-lightweight local (100M params), no internet needed
+    #   qwen3      — better local quality, instruction-controllable voice style
+    #   edge       — FREE Microsoft neural TTS (cloud, no API key), best free quality
+    #   elevenlabs — PAID cloud TTS, best overall quality (needs ELEVENLABS_API_KEY)
     TTS_ENGINE: str = "pocket"
 
     # Ollama Configuration
@@ -42,9 +46,22 @@ class Settings(BaseSettings):
     # ElevenLabs Configuration
     ELEVENLABS_API_KEY: str = ""  # Set via environment variable
 
-    # ElevenLabs TTS (legacy, replaced by Qwen3-TTS)
-    ELEVENLABS_VOICE: str = "tapn1QwocNXk3viVSowa"  # Selected voice
-    ELEVENLABS_MODEL: str = "eleven_monolingual_v1"  # or eleven_multilingual_v2
+    # ElevenLabs TTS
+    # Voice IDs — browse at https://elevenlabs.io/voice-library
+    # Good cartoon-cat choices (pre-made voices):
+    #   "XB0fDUnXU5powFXDhCwa" — Charlotte (warm, bright female)
+    #   "EXAVITQu4vr4xnSDxMaL" — Bella (soft, gentle — good for sleepy mood)
+    #   "jBpfuIE2acCO8z3wKNLl" — Gigi (high-pitched, playful — closest to cartoon)
+    ELEVENLABS_VOICE: str = "jBpfuIE2acCO8z3wKNLl"  # Gigi — playful, high-pitched
+    ELEVENLABS_MODEL: str = "eleven_turbo_v2"  # Fast, low-latency model
+
+    # Edge TTS voice (used when TTS_ENGINE="edge")
+    # Microsoft neural voices — free, no API key, requires internet + ffmpeg.
+    # Best cartoon-cat options:
+    #   en-US-AnaNeural     — actual child voice, youngest/most playful (★ recommended)
+    #   en-US-AriaNeural    — bright, enthusiastic female; sounds great + pitch shift
+    #   en-GB-MaisieNeural  — British child voice, charming and light
+    EDGE_TTS_VOICE: str = "en-US-AnaNeural"
 
     # Qwen3-TTS Configuration (local)
     QWEN_TTS_MODEL_ID: str = "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice"
