@@ -35,10 +35,52 @@ MOOD_RESPONSE_WEIGHTS: dict = {
 
 # Proactive speech intervals per mood (min_sec, max_sec)
 PROACTIVE_INTERVALS: dict = {
-    CatMood.HAPPY:   (45.0, 90.0),
-    CatMood.BORED:   (20.0, 50.0),
-    CatMood.CURIOUS: (60.0, 120.0),
-    CatMood.SLEEPY:  (120.0, 240.0),
+    CatMood.HAPPY:   (20.0, 40.0),
+    CatMood.BORED:   (12.0, 25.0),
+    CatMood.CURIOUS: (25.0, 50.0),
+    CatMood.SLEEPY:  (60.0, 120.0),
+}
+
+# Physical behavior intervals per mood (min_sec, max_sec) — lightweight, no LLM needed
+BEHAVIOR_INTERVALS: dict = {
+    CatMood.HAPPY:   (12.0, 20.0),
+    CatMood.BORED:   (15.0, 28.0),
+    CatMood.CURIOUS: (8.0, 18.0),
+    CatMood.SLEEPY:  (40.0, 80.0),
+}
+
+# Physical behaviors per mood — (behavior_key, display_text, animation_hint, duration_ms)
+# animation_hint maps to GameState on the frontend
+BEHAVIORS_BY_MOOD: dict = {
+    CatMood.HAPPY: [
+        ("zoom",        "*suddenly activates ZOOMIES for no reason*",              "silly",      3500),
+        ("knock_off",   "*stares into your eyes and slowly pushes thing off table*","silly",      2500),
+        ("show_belly",  "*dramatically flops over and exposes belly*",              "silly",      4000),
+        ("bring_gift",  "*drops a crinkle ball at your feet proudly*",              "speaking",   3000),
+        ("demand_pets", "*headbutts your hand repeatedly until pet*",               "speaking",   3500),
+        ("chase_tail",  "*spots own tail... ATTACK MODE engaged*",                  "silly",      3000),
+    ],
+    CatMood.BORED: [
+        ("stare_wall",  "*has been staring at that corner for 10 minutes*",         "processing", 5000),
+        ("knock_off",   "*knocks thing off table... stares you dead in the eyes*",  "silly",      3000),
+        ("demand_pets", "*sits directly on your keyboard demanding attention*",      "speaking",   4000),
+        ("groom",       "*begins extensive grooming session, ignoring everything*",  "idle",       5000),
+        ("yawn_stretch","*yawns enormously, showing every single tooth*",           "idle",       3500),
+    ],
+    CatMood.CURIOUS: [
+        ("stare_wall",  "*investigates that suspicious spot on the wall INTENSELY*","processing", 4000),
+        ("chirp",       "*chatters excitedly at a bird through the window*",        "speaking",   3000),
+        ("demand_pets", "*tilts head sideways and stares at you with big eyes*",    "speaking",   3500),
+        ("groom",       "*pauses mid-groom to think about something important*",    "idle",       4000),
+        ("chase_tail",  "*becomes suddenly aware of tail — must destroy it*",       "silly",      3000),
+        ("sniff_around","*sniffs every corner of the room with great suspicion*",   "processing", 4500),
+    ],
+    CatMood.SLEEPY: [
+        ("groom",       "*licks paw in slow motion and wipes face dreamily*",       "idle",       5000),
+        ("nap",         "*curls into a perfect circle and closes eyes*",            "sleeping",   10000),
+        ("yawn_stretch","*stretches in an impossibly long way then collapses*",     "idle",       4000),
+        ("stare_wall",  "*stares at nothing with half-closed eyes*",                "processing", 5000),
+    ],
 }
 
 # Passive sound intervals per mood (min_sec, max_sec)
@@ -129,6 +171,16 @@ class MoodManager:
         """Seconds until next proactive speech attempt."""
         lo, hi = PROACTIVE_INTERVALS[self.current_mood]
         return random.uniform(lo, hi)
+
+    def get_behavior_interval(self) -> float:
+        """Seconds until next physical behavior."""
+        lo, hi = BEHAVIOR_INTERVALS[self.current_mood]
+        return random.uniform(lo, hi)
+
+    def get_random_behavior(self) -> tuple:
+        """Return a random (behavior_key, text, animation, duration_ms) for current mood."""
+        behaviors = BEHAVIORS_BY_MOOD[self.current_mood]
+        return random.choice(behaviors)
 
     def get_passive_sound_interval(self) -> float:
         """Seconds until next passive noise."""

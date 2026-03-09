@@ -11,6 +11,7 @@ import type {
   CatSoundPayload,
   CatProactivePayload,
   CatMoodChangePayload,
+  CatBehaviorPayload,
 } from '../types';
 
 const SESSION_STORAGE_KEY = 'voice_session_id';
@@ -142,13 +143,38 @@ export function useVoiceService(): UseVoiceServiceResult {
       }
     });
 
+    // Physical cat behavior — animate + show caption, no audio
+    ws.on('cat.behavior', (payload: CatBehaviorPayload) => {
+      console.log(`🐱 Behavior: ${payload.behavior} — "${payload.text}"`);
+      setReplyText(payload.text);
+      setTranscript('');
+      setCatMood(payload.mood);
+      const anim = payload.animation as GameState;
+      setGameState(anim);
+      setTimeout(() => {
+        setGameState('idle');
+        setReplyText('');
+      }, payload.duration_ms);
+    });
+
     // Playback-complete is handled by drainAudioQueue above.
+
+    // Unlock audio on the very first user interaction so proactive speech
+    // and passive sounds work even before the mic button is pressed.
+    const unlockOnFirstInteraction = () => {
+      audioPlayer.unlock();
+      catSounds.unlock();
+    };
+    document.addEventListener('click', unlockOnFirstInteraction, { once: true });
+    document.addEventListener('touchstart', unlockOnFirstInteraction, { once: true });
 
     return () => {
       ws.disconnect();
       audioPlayer.destroy();
       catSounds.destroy();
       microphoneRef.current.destroy();
+      document.removeEventListener('click', unlockOnFirstInteraction);
+      document.removeEventListener('touchstart', unlockOnFirstInteraction);
     };
   }, []);
 

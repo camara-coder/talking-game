@@ -432,6 +432,29 @@ class ConnectionManager:
         )
         await self.send_event(session_id, event)
 
+    async def broadcast_cat_behavior(
+        self,
+        session_id: str,
+        behavior: str,
+        text: str,
+        animation: str,
+        mood: str,
+        duration_ms: int,
+    ):
+        """Broadcast a physical cat behavior event (no audio — frontend animates it)"""
+        event = WebSocketEvent(
+            type=EventType.CAT_BEHAVIOR,
+            session_id=session_id,
+            payload={
+                "behavior": behavior,
+                "text": text,
+                "animation": animation,
+                "mood": mood,
+                "duration_ms": duration_ms,
+            }
+        )
+        await self.send_event(session_id, event)
+
     async def broadcast_cat_mood_change(self, session_id: str, mood: str):
         """Broadcast cat mood change event"""
         event = WebSocketEvent(
