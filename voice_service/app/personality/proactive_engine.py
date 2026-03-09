@@ -94,7 +94,7 @@ class ProactiveEngine:
 
     async def _proactive_speech_loop(self) -> None:
         """Generate LLM+TTS proactive speech at longer random intervals."""
-        await asyncio.sleep(30)  # Longer startup delay
+        await asyncio.sleep(8)  # Short startup delay — fire first proactive speech quickly
         while self._running:
             try:
                 interval = self.mood_manager.get_proactive_interval()
