@@ -27,9 +27,12 @@ class ProactiveEngine:
         self.mood_manager = mood_manager
         self._passive_task: Optional[asyncio.Task] = None
         self._proactive_task: Optional[asyncio.Task] = None
+        self._behavior_task: Optional[asyncio.Task] = None
         self._mood_task: Optional[asyncio.Task] = None
         self._paused = False
         self._running = False
+        # Guard: only one proactive action at a time (speech OR behavior)
+        self._acting = False
 
     # ──────────────────────────────────────────────
     # Lifecycle
@@ -41,12 +44,13 @@ class ProactiveEngine:
         self._running = True
         self._passive_task = asyncio.create_task(self._passive_sound_loop())
         self._proactive_task = asyncio.create_task(self._proactive_speech_loop())
+        self._behavior_task = asyncio.create_task(self._behavior_loop())
         self._mood_task = asyncio.create_task(self._mood_tick_loop())
         logger.info(f"ProactiveEngine started for session {self.session_id}")
 
     def stop(self) -> None:
         self._running = False
-        for task in [self._passive_task, self._proactive_task, self._mood_task]:
+        for task in [self._passive_task, self._proactive_task, self._behavior_task, self._mood_task]:
             if task and not task.done():
                 task.cancel()
         logger.info(f"ProactiveEngine stopped for session {self.session_id}")
@@ -93,22 +97,41 @@ class ProactiveEngine:
                 await asyncio.sleep(5)
 
     async def _proactive_speech_loop(self) -> None:
-        """Generate LLM+TTS proactive speech at longer random intervals."""
-        await asyncio.sleep(8)  # Short startup delay — fire first proactive speech quickly
+        """Generate LLM+TTS proactive speech — speaks first, then waits the interval."""
+        await asyncio.sleep(8)  # Brief startup grace period
         while self._running:
             try:
+                # Act NOW (if idle and not already doing something)
+                if not self._paused and self._session_is_idle() and not self._acting:
+                    await self._trigger_proactive_speech()
+                # Then wait before the next speech
                 interval = self.mood_manager.get_proactive_interval()
                 await asyncio.sleep(interval)
                 if not self._running:
                     break
-                if self._paused or not self._session_is_idle():
-                    continue
-                await self._trigger_proactive_speech()
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 logger.error(f"[{self.session_id}] Proactive speech loop error: {e}", exc_info=True)
                 await asyncio.sleep(10)
+
+    async def _behavior_loop(self) -> None:
+        """Fire lightweight physical cat behaviors at short intervals — no LLM/TTS needed."""
+        await asyncio.sleep(5)  # Very brief startup — behaviors fire quickly
+        while self._running:
+            try:
+                interval = self.mood_manager.get_behavior_interval()
+                await asyncio.sleep(interval)
+                if not self._running:
+                    break
+                if self._paused or not self._session_is_idle() or self._acting:
+                    continue
+                await self._trigger_behavior()
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"[{self.session_id}] Behavior loop error: {e}", exc_info=True)
+                await asyncio.sleep(5)
 
     async def _mood_tick_loop(self) -> None:
         """Check mood transitions every 60 seconds."""
@@ -137,6 +160,7 @@ class ProactiveEngine:
         if not session:
             return
 
+        self._acting = True
         mood = self.mood_manager.current_mood
         context = session.get_context(num_turns=3)
         system_prompt = get_proactive_prompt(mood) + get_context_note(context)
@@ -193,6 +217,7 @@ class ProactiveEngine:
         except Exception as e:
             logger.error(f"[{self.session_id}] Proactive speech failed: {e}", exc_info=True)
         finally:
+            self._acting = False
             session = session_manager.get_session(self.session_id)
             if session and session.status == SessionStatus.SPEAKING:
                 session.status = SessionStatus.IDLE
@@ -234,6 +259,44 @@ class ProactiveEngine:
             logger.error(f"[{self.session_id}] Proactive Ollama failed: {exc}")
             return None
 
+    async def _trigger_behavior(self) -> None:
+        """Fire a lightweight physical behavior — no LLM or TTS needed."""
+        from app.api.session_manager import session_manager
+        from app.api.models import SessionStatus
+
+        session = session_manager.get_session(self.session_id)
+        if not session:
+            return
+
+        behavior, text, animation, duration_ms = self.mood_manager.get_random_behavior()
+        logger.info(f"[{self.session_id}] Cat behavior: {behavior} ({animation}, {duration_ms}ms)")
+
+        self._acting = True
+        try:
+            from datetime import datetime
+            session.updated_at = datetime.utcnow()
+            session.status = SessionStatus.SPEAKING
+
+            await self._broadcast_cat_behavior(behavior, text, animation, duration_ms)
+
+            # Hold the acting state for the behavior duration so other triggers
+            # don't interrupt mid-animation
+            await asyncio.sleep(duration_ms / 1000.0)
+
+            # Nap: play a passive sound after waking up to signal the transition
+            if behavior == "nap":
+                await asyncio.sleep(0.5)
+                await self._broadcast_cat_sound("meow_short")
+
+        except Exception as e:
+            logger.error(f"[{self.session_id}] Behavior trigger failed: {e}", exc_info=True)
+        finally:
+            self._acting = False
+            session = session_manager.get_session(self.session_id)
+            if session and session.status == SessionStatus.SPEAKING:
+                session.status = SessionStatus.IDLE
+                await self._broadcast_cat_state("idle")
+
     async def _synthesize_tts(self, text: str) -> Optional[str]:
         """Generate TTS audio and return the file path."""
         try:
@@ -272,6 +335,18 @@ class ProactiveEngine:
             )
         except Exception as e:
             logger.debug(f"[{self.session_id}] Could not broadcast cat.proactive: {e}")
+
+    async def _broadcast_cat_behavior(
+        self, behavior: str, text: str, animation: str, duration_ms: int
+    ) -> None:
+        try:
+            from app.api.ws import connection_manager
+            await connection_manager.broadcast_cat_behavior(
+                self.session_id, behavior, text, animation,
+                self.mood_manager.current_mood.value, duration_ms
+            )
+        except Exception as e:
+            logger.debug(f"[{self.session_id}] Could not broadcast cat.behavior: {e}")
 
     async def _broadcast_cat_mood_change(self, new_mood: CatMood) -> None:
         try:

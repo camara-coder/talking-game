@@ -15,7 +15,8 @@ export type EventType =
   | 'cat.sound'
   | 'cat.proactive'
   | 'cat.mood_change'
-  | 'cat.state';
+  | 'cat.state'
+  | 'cat.behavior';
 
 // WebSocket event payload
 export interface WebSocketEvent {
@@ -100,4 +101,12 @@ export interface CatMoodChangePayload {
 
 export interface CatStatePayload {
   state: string;
+}
+
+export interface CatBehaviorPayload {
+  behavior: string;
+  text: string;
+  animation: GameState;
+  mood: CatMood;
+  duration_ms: number;
 }

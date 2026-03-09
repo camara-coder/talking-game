@@ -31,6 +31,7 @@ class EventType(str, Enum):
     CAT_PROACTIVE = "cat.proactive"
     CAT_MOOD_CHANGE = "cat.mood_change"
     CAT_STATE = "cat.state"
+    CAT_BEHAVIOR = "cat.behavior"
 
 
 # Request Models
