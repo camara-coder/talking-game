@@ -12,41 +12,35 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
+# Module-level singleton — model is loaded once and reused across requests.
+# faster-whisper models are large (244MB for small.en) and slow to load;
+# reloading on every pipeline instantiation would add multi-second latency
+# to every request.
+_whisper_model: Optional[WhisperModel] = None
+
+
+def _get_whisper_model() -> WhisperModel:
+    global _whisper_model
+    if _whisper_model is not None:
+        return _whisper_model
+    logger.info(
+        f"Loading faster-whisper model: {settings.STT_MODEL_SIZE} "
+        f"(device={settings.STT_DEVICE}, compute={settings.STT_COMPUTE_TYPE})"
+    )
+    _whisper_model = WhisperModel(
+        settings.STT_MODEL_SIZE,
+        device=settings.STT_DEVICE,
+        compute_type=settings.STT_COMPUTE_TYPE,
+    )
+    logger.info(f"faster-whisper model loaded: {settings.STT_MODEL_SIZE}")
+    return _whisper_model
+
 
 class STTProcessor:
     """Speech-to-Text processor using faster-whisper"""
 
-    def __init__(
-        self,
-        model_size: str = None,
-        device: str = None,
-        compute_type: str = None
-    ):
-        """
-        Initialize STT processor
-
-        Args:
-            model_size: Whisper model size (tiny.en, base.en, small.en, etc.)
-            device: Device to run on ("cpu" or "cuda")
-            compute_type: Compute type (int8, float16, float32)
-        """
-        self.model_size = model_size or settings.STT_MODEL_SIZE
-        self.device = device or settings.STT_DEVICE
-        self.compute_type = compute_type or settings.STT_COMPUTE_TYPE
-
-        logger.info(
-            f"Initializing STT: model={self.model_size}, "
-            f"device={self.device}, compute={self.compute_type}"
-        )
-
-        # Load model (first time will download)
-        self.model = WhisperModel(
-            self.model_size,
-            device=self.device,
-            compute_type=self.compute_type
-        )
-
-        logger.info("STT model loaded successfully")
+    def __init__(self):
+        self.model = _get_whisper_model()
 
     def transcribe(self, audio: np.ndarray, sample_rate: int = None) -> Optional[str]:
         """
@@ -70,14 +64,12 @@ class STTProcessor:
         start_time = time.time()
 
         try:
-            # faster-whisper expects audio in the correct sample rate (16kHz)
-            # If audio is not 16kHz, we should resample
+            # faster-whisper expects 16kHz audio
             if sample_rate != 16000:
                 logger.warning(
                     f"Audio sample rate is {sample_rate}Hz, "
                     "faster-whisper works best with 16kHz"
                 )
-                # Resample if needed
                 from app.utils.audio_io import resample_audio
                 audio = resample_audio(audio, sample_rate, 16000)
                 sample_rate = 16000
@@ -101,9 +93,7 @@ class STTProcessor:
                     f"Segment [{segment.start:.2f}s -> {segment.end:.2f}s]: {segment.text}"
                 )
 
-            # Combine segments
             transcript = " ".join(transcript_parts).strip()
-
             elapsed_time = time.time() - start_time
 
             if transcript:
