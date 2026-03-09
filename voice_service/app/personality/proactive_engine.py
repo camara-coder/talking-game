@@ -144,6 +144,11 @@ class ProactiveEngine:
         logger.info(f"[{self.session_id}] Triggering proactive speech — mood={mood}")
 
         try:
+            # Keep the session alive in the cleanup check — proactive speech
+            # counts as activity even without user input.
+            from datetime import datetime
+            session.updated_at = datetime.utcnow()
+
             # Mark session as speaking so other triggers don't fire
             session.status = SessionStatus.SPEAKING
             await self._broadcast_cat_state("speaking")
@@ -194,14 +199,39 @@ class ProactiveEngine:
                 await self._broadcast_cat_state("idle")
 
     def _call_llm(self, system_prompt: str) -> Optional[str]:
-        """Synchronous LLM call for proactive text generation."""
+        """
+        Synchronous LLM call for proactive text generation.
+
+        Tries Claude first (fast), falls back to Ollama on any error.
+        Uses a minimal trigger prompt — the full personality lives in the system prompt.
+        """
+        prompt = "..."  # The system prompt carries all context
+
+        # ── Try Claude first ────────────────────────────────────────────────
+        if settings.ANTHROPIC_API_KEY:
+            try:
+                from app.pipeline.processors.llm_claude import ClaudeLLMProcessor
+                sentences = list(
+                    ClaudeLLMProcessor().generate_sentences_stream(
+                        prompt, context=None, system_prompt=system_prompt
+                    )
+                )
+                if sentences:
+                    return " ".join(sentences)
+            except Exception as exc:
+                logger.warning(
+                    f"[{self.session_id}] Proactive Claude failed "
+                    f"({type(exc).__name__}), falling back to Ollama"
+                )
+
+        # ── Fallback: Ollama ─────────────────────────────────────────────────
         try:
             from app.pipeline.processors.llm_ollama import OllamaLLMProcessor
-            llm = OllamaLLMProcessor()
-            # Use a minimal "trigger" user message — the personality is all in the system prompt
-            return llm.generate(prompt="...", system_prompt=system_prompt)
-        except Exception as e:
-            logger.error(f"[{self.session_id}] Proactive LLM call failed: {e}")
+            return OllamaLLMProcessor().generate(
+                prompt=prompt, system_prompt=system_prompt
+            )
+        except Exception as exc:
+            logger.error(f"[{self.session_id}] Proactive Ollama failed: {exc}")
             return None
 
     async def _synthesize_tts(self, text: str) -> Optional[str]:

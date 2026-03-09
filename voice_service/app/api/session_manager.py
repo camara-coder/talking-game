@@ -156,6 +156,17 @@ class SessionManager:
         # Check in-memory cache first
         if session_id in self.sessions:
             logger.info(f"Session found in memory: {session_id}")
+            # Ensure the proactive engine is running (it might have been
+            # stopped by cleanup and then the client reconnected).
+            if session_id not in self.proactive_engines:
+                mood_manager = self.mood_managers.get(session_id)
+                if mood_manager is None:
+                    mood_manager = MoodManager()
+                    self.mood_managers[session_id] = mood_manager
+                engine = ProactiveEngine(session_id, mood_manager)
+                self.proactive_engines[session_id] = engine
+                engine.start()
+                logger.info(f"Restarted ProactiveEngine for in-memory session {session_id}")
             return self.sessions[session_id]
 
         # Try to load from database
@@ -182,7 +193,19 @@ class SessionManager:
 
                         # Add to in-memory cache
                         self.sessions[session_id] = session
-                        logger.info(f"Session resumed from DB: {session_id} ({len(session.turns)} turns)")
+
+                        # Create MoodManager + ProactiveEngine that were not
+                        # persisted to DB (they are in-process only).
+                        mood_manager = MoodManager()
+                        self.mood_managers[session_id] = mood_manager
+                        engine = ProactiveEngine(session_id, mood_manager)
+                        self.proactive_engines[session_id] = engine
+                        engine.start()
+
+                        logger.info(
+                            f"Session resumed from DB: {session_id} "
+                            f"({len(session.turns)} turns, cat engine started)"
+                        )
                         return session
             except RuntimeError as e:
                 # Database not available - continue to create new session
