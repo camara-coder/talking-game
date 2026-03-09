@@ -132,8 +132,11 @@ class Settings(BaseSettings):
     # LLM Configuration
     LLM_TEMPERATURE: float = 0.7
     LLM_TOP_P: float = 0.9
-    LLM_MAX_TOKENS: int = 100
-    LLM_CONTEXT_TURNS: int = 4  # Number of previous turns to keep
+    # Cat responses are 1-2 short sentences (~20-40 tokens).  Keeping this
+    # small significantly reduces generation time on a CPU-hosted 0.5b model.
+    LLM_MAX_TOKENS: int = 50
+    # Fewer context turns = smaller prompt = faster inference on tiny models.
+    LLM_CONTEXT_TURNS: int = 2  # Number of previous turns to keep
 
     # Response Shaping Configuration
     MAX_RESPONSE_SENTENCES: int = 2

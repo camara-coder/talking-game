@@ -89,9 +89,9 @@ class OllamaLLMProcessor:
                     messages.append({"role": "user", "content": turn["user"]})
                     messages.append({"role": "assistant", "content": turn["assistant"]})
 
-            # Add current prompt with instruction
-            user_message = f"{prompt}\n\nReply briefly. One or two sentences."
-            messages.append({"role": "user", "content": user_message})
+            # Add current user message (brevity is already enforced by
+            # the cat system prompts and LLM_MAX_TOKENS — no need to repeat)
+            messages.append({"role": "user", "content": prompt})
 
             # Call Ollama API
             payload = {
