@@ -72,6 +72,11 @@ class ConnectionManager:
         self.processing_started: Dict[str, bool] = {}
         # Pending endpoint confirmation tasks
         self.endpoint_tasks: Dict[str, asyncio.Task] = {}
+        # Proactive speech events that fired while no client was connected.
+        # Replayed immediately when the client (re)connects so the cat's
+        # initiative is never silently lost.  Capped at 1 per session so
+        # the cat doesn't dump a backlog of old speech on reconnect.
+        self.pending_proactive: Dict[str, WebSocketEvent] = {}
         self._lock = asyncio.Lock()
 
     async def connect(self, websocket: WebSocket, session_id: str):
@@ -82,6 +87,15 @@ class ConnectionManager:
             if session_id not in self.active_connections:
                 self.active_connections[session_id] = set()
             self.active_connections[session_id].add(websocket)
+
+        # Replay any proactive speech the cat sent while the client was away
+        if session_id in self.pending_proactive:
+            pending = self.pending_proactive.pop(session_id)
+            try:
+                await websocket.send_text(pending.model_dump_json())
+                logger.info(f"Replayed missed proactive event for session {session_id}")
+            except Exception as e:
+                logger.debug(f"Could not replay pending proactive event: {e}")
 
         logger.info(
             f"WebSocket connected for session {session_id}. "
@@ -299,6 +313,10 @@ class ConnectionManager:
         """Send event to all connections for a session"""
         if session_id not in self.active_connections:
             logger.warning(f"No active connections for session {session_id}")
+            # Stash cat.proactive events so they replay on reconnect
+            if event.type == EventType.CAT_PROACTIVE:
+                self.pending_proactive[session_id] = event
+                logger.info(f"Stored pending proactive event for session {session_id}")
             return
 
         # Convert event to JSON
@@ -464,6 +482,12 @@ async def websocket_endpoint(
             try:
                 # Receive message (can be text or binary)
                 message = await websocket.receive()
+
+                # Starlette may return a disconnect dict instead of raising
+                # WebSocketDisconnect when the client closes cleanly.
+                if message.get("type") == "websocket.disconnect":
+                    logger.info(f"WebSocket disconnect message for session {session_id}")
+                    break
 
                 if "text" in message:
                     # Handle JSON text messages
