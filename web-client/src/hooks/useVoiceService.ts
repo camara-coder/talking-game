@@ -44,6 +44,11 @@ export function useVoiceService(): UseVoiceServiceResult {
     new MicrophoneCapture({ sampleRate: 16000, chunkDuration: 100 })
   );
 
+  // Serialised audio queue — ensures multi-segment replies (streaming TTS)
+  // play back-to-back rather than overlapping.
+  const audioQueueRef = useRef<string[]>([]);
+  const audioPlayingRef = useRef(false);
+
   // Setup WebSocket event handlers
   useEffect(() => {
     const ws = wsRef.current;
@@ -67,16 +72,29 @@ export function useVoiceService(): UseVoiceServiceResult {
       setReplyText(payload.text);
     });
 
-    ws.on('reply.audio_ready', async (payload: AudioReadyPayload) => {
-      try {
-        setGameState('speaking');
-        const audioData = await apiRef.current.downloadAudio(payload.url);
-        await audioPlayer.playAudio(audioData);
-      } catch (err) {
-        console.error('Failed to play audio:', err);
-        setError('Failed to play audio');
-        setGameState('idle');
+    // Drain the audio queue sequentially.  Each segment is played to
+    // completion before the next starts.  gameState returns to 'idle'
+    // only when the queue is fully empty.
+    async function drainAudioQueue() {
+      if (audioPlayingRef.current) return;
+      audioPlayingRef.current = true;
+      setGameState('speaking');
+      while (audioQueueRef.current.length > 0) {
+        const url = audioQueueRef.current.shift()!;
+        try {
+          const audioData = await apiRef.current.downloadAudio(url);
+          await audioPlayer.playAudio(audioData);
+        } catch (err) {
+          console.error('Failed to play audio segment:', err);
+        }
       }
+      audioPlayingRef.current = false;
+      setGameState('idle');
+    }
+
+    ws.on('reply.audio_ready', (payload: AudioReadyPayload) => {
+      audioQueueRef.current.push(payload.url);
+      drainAudioQueue();
     });
 
     ws.on('error', (payload) => {
@@ -124,10 +142,7 @@ export function useVoiceService(): UseVoiceServiceResult {
       }
     });
 
-    // ── Playback complete ─────────────────────────
-    audioPlayer.onPlaybackComplete(() => {
-      setGameState('idle');
-    });
+    // Playback-complete is handled by drainAudioQueue above.
 
     return () => {
       ws.disconnect();

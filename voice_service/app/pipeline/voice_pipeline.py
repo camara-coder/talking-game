@@ -52,6 +52,51 @@ class VoicePipeline:
 
         logger.info("Voice pipeline initialized successfully")
 
+    def transcribe_and_route(
+        self,
+        audio: np.ndarray,
+        sample_rate: int = None,
+    ) -> Dict[str, Any]:
+        """
+        Run the pipeline up through STT + skills routing, but stop before LLM.
+
+        Returns dict with keys:
+          transcript, route, math_response, error
+        """
+        if sample_rate is None:
+            sample_rate = settings.AUDIO_SAMPLE_RATE
+
+        result: Dict[str, Any] = {
+            "transcript": None,
+            "route": None,
+            "math_response": None,
+            "error": None,
+        }
+
+        try:
+            clean_audio = self.noise_reducer.process(audio)
+            vad_audio = self.vad.process(clean_audio)
+            if vad_audio is None:
+                result["error"] = "No speech detected"
+                return result
+
+            transcript = self.stt.transcribe(vad_audio, sample_rate)
+            if not transcript:
+                result["error"] = "Transcription failed or empty"
+                return result
+
+            result["transcript"] = transcript
+
+            route, math_response = self.skills_router.route(transcript)
+            result["route"] = route
+            result["math_response"] = math_response
+
+        except Exception as e:
+            logger.error(f"transcribe_and_route error: {e}", exc_info=True)
+            result["error"] = str(e)
+
+        return result
+
     def process(
         self,
         audio: np.ndarray,
