@@ -32,10 +32,14 @@ def _create_stt_processor():
         from app.pipeline.processors.stt_processor import STTProcessor
         logger.info(f"Using faster-whisper STT engine (model={settings.STT_MODEL_SIZE})")
         return STTProcessor()
+    elif engine == "elevenlabs":
+        from app.pipeline.processors.stt_elevenlabs import ElevenLabsSTTProcessor
+        logger.info(f"Using ElevenLabs STT engine (model={settings.ELEVENLABS_STT_MODEL})")
+        return ElevenLabsSTTProcessor()
     else:
         raise ValueError(
             f"Unknown STT_ENGINE '{engine}'. "
-            f"Supported: 'whisper', 'moonshine', 'canary-qwen'"
+            f"Supported: 'whisper', 'moonshine', 'canary-qwen', 'elevenlabs'"
         )
 
 

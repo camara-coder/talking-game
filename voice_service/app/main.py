@@ -101,6 +101,9 @@ async def startup_event():
         except Exception as e:
             logger.error(f"Moonshine STT model load failed: {e}", exc_info=True)
             raise
+    elif stt_engine == "elevenlabs":
+        if not settings.ELEVENLABS_API_KEY:
+            raise RuntimeError("STT_ENGINE=elevenlabs but ELEVENLABS_API_KEY is not set")
 
     # Start session manager
     await session_manager.start()
