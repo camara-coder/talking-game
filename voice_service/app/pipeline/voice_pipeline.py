@@ -28,10 +28,14 @@ def _create_stt_processor():
         from app.pipeline.processors.stt_canary_qwen import CanaryQwenSTTProcessor
         logger.info("Using Canary-Qwen STT engine")
         return CanaryQwenSTTProcessor()
+    elif engine == "whisper":
+        from app.pipeline.processors.stt_processor import STTProcessor
+        logger.info(f"Using faster-whisper STT engine (model={settings.STT_MODEL_SIZE})")
+        return STTProcessor()
     else:
         raise ValueError(
             f"Unknown STT_ENGINE '{engine}'. "
-            f"Supported: 'canary-qwen', 'moonshine'"
+            f"Supported: 'whisper', 'moonshine', 'canary-qwen'"
         )
 
 

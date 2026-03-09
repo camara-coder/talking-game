@@ -82,13 +82,15 @@ class STTProcessor:
                 audio = resample_audio(audio, sample_rate, 16000)
                 sample_rate = 16000
 
-            # Transcribe
+            # Transcribe — initial_prompt biases the decoder towards domain
+            # vocabulary (cat, fish, pet, meow...) without constraining it.
             segments, info = self.model.transcribe(
                 audio,
                 beam_size=settings.STT_BEAM_SIZE,
                 language=settings.STT_LANGUAGE,
                 vad_filter=False,  # We already did VAD
-                condition_on_previous_text=False
+                condition_on_previous_text=False,
+                initial_prompt=settings.STT_INITIAL_PROMPT or None,
             )
 
             # Collect all segments
