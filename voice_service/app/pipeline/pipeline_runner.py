@@ -27,10 +27,16 @@ def _create_tts_processor():
     elif engine == "qwen3":
         from app.pipeline.processors.tts_qwen3 import Qwen3TTSProcessor
         return Qwen3TTSProcessor()
+    elif engine == "edge":
+        from app.pipeline.processors.tts_edge import EdgeTTSProcessor
+        return EdgeTTSProcessor()
+    elif engine == "elevenlabs":
+        from app.pipeline.processors.tts_elevenlabs import ElevenLabsTTSProcessor
+        return ElevenLabsTTSProcessor(voice=settings.ELEVENLABS_VOICE)
     else:
         raise ValueError(
             f"Unknown TTS_ENGINE '{engine}'. "
-            f"Supported: 'qwen3', 'pocket'"
+            f"Supported: 'pocket', 'qwen3', 'edge', 'elevenlabs'"
         )
 
 
