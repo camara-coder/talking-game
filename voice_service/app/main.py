@@ -71,9 +71,19 @@ async def startup_event():
     logger.info(f"Data Directory: {settings.DATA_DIR}")
     logger.info("=" * 60)
 
-    # STT startup validation (engine-aware)
+    # STT startup validation (engine-aware) — pre-load model so first
+    # user request is not blocked by a cold model load.
     stt_engine = settings.STT_ENGINE.lower()
-    if stt_engine == "canary-qwen" and settings.CANARY_QWEN_STARTUP_LOAD:
+    if stt_engine == "whisper":
+        try:
+            logger.info(f"Pre-loading faster-whisper model ({settings.STT_MODEL_SIZE})...")
+            from app.pipeline.processors.stt_processor import _get_whisper_model
+            _get_whisper_model()
+            logger.info("faster-whisper model ready")
+        except Exception as e:
+            logger.error(f"faster-whisper model load failed: {e}", exc_info=True)
+            raise
+    elif stt_engine == "canary-qwen" and settings.CANARY_QWEN_STARTUP_LOAD:
         try:
             logger.info("Validating Canary-Qwen STT model load...")
             from app.pipeline.processors.stt_canary_qwen import _get_canary_model

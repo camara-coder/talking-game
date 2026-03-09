@@ -19,8 +19,10 @@ class Settings(BaseSettings):
     PUBLIC_URL: str = ""  # If empty, uses http://SERVICE_HOST:SERVICE_PORT
 
     # Engine Selection — choose which STT and TTS backend to use
-    # STT options: "canary-qwen", "moonshine"
-    STT_ENGINE: str = "moonshine"
+    # STT options: "whisper" (faster-whisper, best accuracy/speed balance ★),
+    #              "moonshine" (lightest CPU, lowest accuracy),
+    #              "canary-qwen" (heaviest, highest accuracy)
+    STT_ENGINE: str = "whisper"
     # TTS options: "pocket" | "qwen3" | "edge" | "elevenlabs"
     #   pocket     — ultra-lightweight local (100M params), no internet needed
     #   qwen3      — better local quality, instruction-controllable voice style
@@ -118,12 +120,23 @@ class Settings(BaseSettings):
     # Noise Reduction Configuration
     NOISE_REDUCE_PROP_DECREASE: float = 0.6  # Reduction strength (0.0-1.0)
 
-    # STT Configuration
-    STT_MODEL_SIZE: str = "base.en"  # or "small.en" for better accuracy
+    # STT Configuration (faster-whisper)
+    # Model sizes (accuracy vs speed): tiny.en < base.en < small.en < medium.en
+    # small.en (244M) is the sweet spot — significantly more accurate than base.en
+    # on short, conversational utterances with minimal extra latency on CPU.
+    STT_MODEL_SIZE: str = "small.en"
     STT_DEVICE: str = "cpu"
-    STT_COMPUTE_TYPE: str = "int8"  # CPU-friendly
+    STT_COMPUTE_TYPE: str = "int8"  # CPU-friendly quantised weights
     STT_BEAM_SIZE: int = 5
     STT_LANGUAGE: str = "en"
+    # Initial prompt biases the Whisper decoder toward domain vocabulary.
+    # Homophones like "fish/this", "like/might", "cat/that" are corrected by
+    # surfacing the expected words before decoding begins.  Keep it short
+    # (< 20 tokens) — Whisper uses this as a soft prior, not a hard constraint.
+    STT_INITIAL_PROMPT: str = (
+        "Talking to a cat named Whiskers. "
+        "Topics: fish, food, pets, meow, purr, play, sleep, belly, paws, tail."
+    )
 
     # OpenAI Configuration (for Whisper STT)
     OPENAI_API_KEY: str = ""  # Set via environment variable
