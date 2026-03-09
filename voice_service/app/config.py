@@ -129,6 +129,14 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""  # Set via environment variable
     OPENAI_WHISPER_MODEL: str = "whisper-1"  # OpenAI Whisper model
 
+    # Anthropic / Claude Configuration
+    # Set ANTHROPIC_API_KEY in your .env or environment.
+    # If missing or exhausted, the pipeline automatically falls back to Ollama.
+    ANTHROPIC_API_KEY: str = ""
+    # claude-haiku-4-5 is the fastest Claude model — ideal for real-time
+    # conversational responses (1-2 sentences) where latency matters most.
+    ANTHROPIC_MODEL: str = "claude-haiku-4-5"
+
     # LLM Configuration
     LLM_TEMPERATURE: float = 0.7
     LLM_TOP_P: float = 0.9

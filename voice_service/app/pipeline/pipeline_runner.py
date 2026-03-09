@@ -24,12 +24,37 @@ from app.utils.audio_io import save_wav
 logger = logging.getLogger(__name__)
 
 
-def _collect_sentences(llm, prompt, context, system_prompt) -> list[str]:
+def _collect_sentences(prompt: str, context: list, system_prompt: str) -> list[str]:
     """
-    Run the streaming LLM generator synchronously and return all sentences.
+    Generate LLM sentences with Claude as primary and Ollama as fallback.
+
+    Tries Claude (claude-haiku-4-5) first — ~5-10× faster than local CPU
+    inference.  Falls back to the Ollama 0.5b model if:
+      - ANTHROPIC_API_KEY is not set
+      - API credits are exhausted / any Anthropic API error
+
     Called via asyncio.to_thread so it doesn't block the event loop.
     """
-    return list(llm.generate_sentences_stream(prompt, context, system_prompt))
+    # ── Try Claude first ────────────────────────────────────────────────────
+    if settings.ANTHROPIC_API_KEY:
+        try:
+            from app.pipeline.processors.llm_claude import ClaudeLLMProcessor
+            sentences = list(
+                ClaudeLLMProcessor().generate_sentences_stream(prompt, context, system_prompt)
+            )
+            if sentences:
+                logger.info(f"Claude replied with {len(sentences)} sentence(s)")
+                return sentences
+        except Exception as exc:
+            logger.warning(
+                f"Claude unavailable ({type(exc).__name__}: {exc}), "
+                "falling back to Ollama"
+            )
+
+    # ── Fallback: local Ollama ──────────────────────────────────────────────
+    logger.info("Using Ollama fallback for LLM")
+    from app.pipeline.processors.llm_ollama import OllamaLLMProcessor
+    return list(OllamaLLMProcessor().generate_sentences_stream(prompt, context, system_prompt))
 
 
 def _create_tts_processor():
@@ -150,9 +175,8 @@ class PipelineRunner:
                     reply_sentences = [pool_reply]
                     logger.info(f"Pool fast-path: '{pool_reply}'")
                 else:
-                    # Full streaming LLM path
+                    # Full LLM path (Claude → Ollama fallback)
                     from app.personality.cat_prompts import get_system_prompt, get_context_note
-                    from app.pipeline.processors.llm_ollama import OllamaLLMProcessor
 
                     system_prompt = settings.SYSTEM_PROMPT
                     if mood_manager:
@@ -161,12 +185,10 @@ class PipelineRunner:
                             get_system_prompt(mood_manager.current_mood, mode)
                             + get_context_note(context)
                         )
-                        logger.info(f"LLM stream: mood={mood_manager.current_mood}, mode={mode}")
+                        logger.info(f"LLM: mood={mood_manager.current_mood}, mode={mode}")
 
-                    llm = OllamaLLMProcessor()
-                    # Run blocking generator in a thread, collect sentences via queue
                     reply_sentences = await asyncio.to_thread(
-                        _collect_sentences, llm, transcript, context, system_prompt
+                        _collect_sentences, transcript, context, system_prompt
                     )
 
             # ── Step 3: TTS + broadcast each sentence ───────────────────────
