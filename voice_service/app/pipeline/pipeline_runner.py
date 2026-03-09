@@ -1,12 +1,18 @@
 """
 Pipeline Runner - Integrates voice pipeline with API
 Handles async execution and WebSocket event broadcasting
+
+Response latency strategy (fastest → slowest):
+  1. Pool fast-path  — pre-baked cat phrase, no LLM (~100 ms total after STT)
+  2. Streaming LLM   — sentence-level TTS; first audio sent before full reply done
+  3. (legacy batch)  — kept only as fallback; not reached in normal operation
 """
 import asyncio
 import logging
 import numpy as np
 from typing import Optional
 import os
+import time
 
 from app.pipeline.voice_pipeline import get_pipeline
 from app.api.session_manager import session_manager
@@ -16,6 +22,14 @@ from app.config import settings
 from app.utils.audio_io import save_wav
 
 logger = logging.getLogger(__name__)
+
+
+def _collect_sentences(llm, prompt, context, system_prompt) -> list[str]:
+    """
+    Run the streaming LLM generator synchronously and return all sentences.
+    Called via asyncio.to_thread so it doesn't block the event loop.
+    """
+    return list(llm.generate_sentences_stream(prompt, context, system_prompt))
 
 
 def _create_tts_processor():
@@ -55,20 +69,17 @@ class PipelineRunner:
         sample_rate: int = None
     ) -> bool:
         """
-        Process audio for a session through the complete pipeline
+        Process audio for a session through the complete pipeline.
 
-        Args:
-            session_id: Session ID
-            audio: Audio data
-            sample_rate: Sample rate in Hz
-
-        Returns:
-            True if successful, False otherwise
+        Flow:
+          1. STT + skills routing  (thread)
+          2a. Math route           → single TTS, broadcast
+          2b. LLM pool fast-path   → single TTS from pre-baked pool, broadcast
+          2c. LLM streaming        → sentence-by-sentence TTS + broadcast
         """
         if sample_rate is None:
             sample_rate = settings.AUDIO_SAMPLE_RATE
 
-        # Get session
         session = session_manager.get_session(session_id)
         if not session:
             logger.error(f"Session not found: {session_id}")
@@ -80,231 +91,180 @@ class PipelineRunner:
 
         turn_id = session.current_turn.turn_id
 
-        # Pause the proactive engine while we process the user's turn
         engine = session_manager.get_proactive_engine(session_id)
         if engine:
             engine.pause()
 
-        # Update mood on user interaction
         mood_manager = session_manager.get_mood_manager(session_id)
         if mood_manager:
             mood_manager.on_user_interaction()
 
         try:
+            t_start = time.time()
             logger.info(f"Processing audio for session {session_id}, turn {turn_id}")
 
-            # Broadcast state: thinking
             await connection_manager.broadcast_state(
-                session_id,
-                SessionStatus.PROCESSING,
-                turn_id
+                session_id, SessionStatus.PROCESSING, turn_id
             )
             session.status = SessionStatus.PROCESSING
 
-            # Get conversation context
-            context = session.get_context(num_turns=settings.LLM_CONTEXT_TURNS)
-
-            # Build dynamic cat system prompt based on mood + response mode
-            system_prompt = None
-            if mood_manager:
-                from app.personality.cat_prompts import get_system_prompt, get_context_note
-                mode = mood_manager.get_response_mode()
-                system_prompt = get_system_prompt(mood_manager.current_mood, mode) + get_context_note(context)
-                logger.info(f"Cat mood={mood_manager.current_mood}, mode={mode}")
-
-            # Run pipeline (CPU-bound — runs in thread pool)
-            result = await asyncio.to_thread(
-                self.pipeline.process,
-                audio,
-                sample_rate,
-                context,
-                system_prompt,
+            # ── Step 1: STT + skills routing ────────────────────────────────
+            stt_result = await asyncio.to_thread(
+                self.pipeline.transcribe_and_route, audio, sample_rate
             )
 
-            # Check for errors
-            if result.get("error"):
-                error_msg = result["error"]
-                logger.error(f"Pipeline error: {error_msg}")
-
+            if stt_result.get("error"):
                 await connection_manager.broadcast_error(
-                    session_id,
-                    "PIPELINE_ERROR",
-                    error_msg,
-                    turn_id
+                    session_id, "PIPELINE_ERROR", stt_result["error"], turn_id
                 )
-
                 session.status = SessionStatus.ERROR
                 return False
 
-            # Extract results
-            transcript = result.get("transcript")
-            reply_text = result.get("reply_text")
-            route = result.get("route")
-            processing_time = result.get("processing_time_ms", 0)
+            transcript = stt_result["transcript"]
+            route = stt_result["route"]
+            math_response = stt_result.get("math_response")
 
-            logger.info(
-                f"Pipeline complete: transcript='{transcript}', "
-                f"reply='{reply_text}', route={route}, time={processing_time}ms"
-            )
-
-            # Update session turn
             session.current_turn.transcript = transcript
-            session.current_turn.reply_text = reply_text
-            session.current_turn.processing_time_ms = processing_time
+            logger.info(f"STT done in {(time.time()-t_start)*1000:.0f}ms: '{transcript}'")
 
-            # Broadcast transcript
             if transcript:
                 await connection_manager.broadcast_transcript(
-                    session_id,
-                    transcript,
-                    turn_id,
-                    partial=False
+                    session_id, transcript, turn_id, partial=False
                 )
 
-            # Broadcast reply text
-            if reply_text:
+            # ── Step 2: Generate reply ───────────────────────────────────────
+            context = session.get_context(num_turns=settings.LLM_CONTEXT_TURNS)
+
+            if route == "math" and math_response:
+                # Math is deterministic — single TTS, no LLM needed
+                reply_sentences = [math_response]
+                logger.info("Math route — skipping LLM")
+
+            else:
+                # LLM route: try pool fast-path first
+                from app.personality.cat_responses import should_use_pool, get_pool_response
+                current_mood = mood_manager.current_mood if mood_manager else None
+
+                if current_mood and should_use_pool(transcript):
+                    pool_reply = get_pool_response(current_mood, transcript)
+                    reply_sentences = [pool_reply]
+                    logger.info(f"Pool fast-path: '{pool_reply}'")
+                else:
+                    # Full streaming LLM path
+                    from app.personality.cat_prompts import get_system_prompt, get_context_note
+                    from app.pipeline.processors.llm_ollama import OllamaLLMProcessor
+
+                    system_prompt = settings.SYSTEM_PROMPT
+                    if mood_manager:
+                        mode = mood_manager.get_response_mode()
+                        system_prompt = (
+                            get_system_prompt(mood_manager.current_mood, mode)
+                            + get_context_note(context)
+                        )
+                        logger.info(f"LLM stream: mood={mood_manager.current_mood}, mode={mode}")
+
+                    llm = OllamaLLMProcessor()
+                    # Run blocking generator in a thread, collect sentences via queue
+                    reply_sentences = await asyncio.to_thread(
+                        _collect_sentences, llm, transcript, context, system_prompt
+                    )
+
+            # ── Step 3: TTS + broadcast each sentence ───────────────────────
+            full_reply = " ".join(reply_sentences)
+            session.current_turn.reply_text = full_reply
+            session.current_turn.processing_time_ms = int((time.time() - t_start) * 1000)
+
+            if full_reply:
                 await connection_manager.broadcast_reply_text(
-                    session_id,
-                    reply_text,
-                    turn_id
+                    session_id, full_reply, turn_id
                 )
 
-            # Generate audio using TTS
-            audio_path = await self._generate_audio_placeholder(
-                session_id,
-                turn_id,
-                reply_text
+            audio_dir = os.path.join(settings.AUDIO_DIR, session_id)
+            os.makedirs(audio_dir, exist_ok=True)
+            base_url = (
+                settings.PUBLIC_URL
+                if settings.PUBLIC_URL
+                else f"http://{settings.SERVICE_HOST}:{settings.SERVICE_PORT}"
             )
 
-            if audio_path:
-                # Apply cat voice pitch shift (makes voice lighter + more playful)
+            any_audio = False
+            for seg_idx, sentence in enumerate(reply_sentences):
+                if not sentence.strip():
+                    continue
+                filename = f"{turn_id}_{seg_idx}.wav" if len(reply_sentences) > 1 else f"{turn_id}.wav"
+                audio_path = os.path.join(audio_dir, filename)
+
+                tts = _create_tts_processor()
+                success = await asyncio.to_thread(tts.synthesize, sentence, audio_path)
+                if not success:
+                    logger.error(f"TTS failed for segment {seg_idx}")
+                    continue
+
                 if settings.CAT_VOICE_PITCH_SEMITONES != 0.0:
                     from app.utils.audio_pitch import pitch_shift_wav_inplace
                     await asyncio.to_thread(
                         pitch_shift_wav_inplace, audio_path, settings.CAT_VOICE_PITCH_SEMITONES
                     )
 
-                session.current_turn.audio_path = audio_path
-
-                # Get actual audio duration and sample rate
                 from app.utils.wav_utils import get_wav_info
                 wav_info = await asyncio.to_thread(get_wav_info, audio_path)
                 duration_ms = int(wav_info.get("duration", 0.0) * 1000)
                 sample_rate_hz = wav_info.get("sample_rate", settings.TTS_SAMPLE_RATE)
 
-                # Broadcast audio ready
-                # Use PUBLIC_URL if set (for production), otherwise use local URL
-                base_url = settings.PUBLIC_URL if settings.PUBLIC_URL else f"http://{settings.SERVICE_HOST}:{settings.SERVICE_PORT}"
-                audio_url = f"{base_url}/api/audio/{session_id}/{turn_id}.wav"
-
+                audio_url = f"{base_url}/api/audio/{session_id}/{filename}"
                 await connection_manager.broadcast_audio_ready(
-                    session_id,
-                    turn_id,
-                    audio_url,
-                    duration_ms=duration_ms,
-                    sample_rate_hz=sample_rate_hz,
+                    session_id, turn_id, audio_url,
+                    duration_ms=duration_ms, sample_rate_hz=sample_rate_hz,
                 )
+                logger.info(
+                    f"Segment {seg_idx} ready in {(time.time()-t_start)*1000:.0f}ms: "
+                    f"'{sentence}' → {audio_url}"
+                )
+                any_audio = True
 
-                # Update state to speaking
-                await connection_manager.broadcast_state(
-                    session_id,
-                    SessionStatus.SPEAKING,
-                    turn_id
-                )
-                session.status = SessionStatus.SPEAKING
-            else:
-                logger.error("TTS synthesis failed: no audio generated")
+                if seg_idx == 0:
+                    # Mark as speaking as soon as the first chunk is ready
+                    await connection_manager.broadcast_state(
+                        session_id, SessionStatus.SPEAKING, turn_id
+                    )
+                    session.status = SessionStatus.SPEAKING
+
+            if not any_audio:
                 await connection_manager.broadcast_error(
-                    session_id,
-                    "TTS_ERROR",
-                    "Failed to synthesize response audio",
-                    turn_id
+                    session_id, "TTS_ERROR", "Failed to synthesize response audio", turn_id
                 )
                 await connection_manager.broadcast_state(
-                    session_id,
-                    SessionStatus.IDLE,
-                    turn_id
+                    session_id, SessionStatus.IDLE, turn_id
                 )
 
-            # Complete turn
             session.complete_turn()
-
-            # Persist turn to database (async background task)
             if len(session.turns) > 0:
-                last_turn = session.turns[-1]
-                asyncio.create_task(session_manager.persist_turn(session_id, last_turn))
+                asyncio.create_task(
+                    session_manager.persist_turn(session_id, session.turns[-1])
+                )
 
-            # After a brief moment, go back to idle
             await asyncio.sleep(0.5)
-            await connection_manager.broadcast_state(
-                session_id,
-                SessionStatus.IDLE,
-                None
-            )
+            await connection_manager.broadcast_state(session_id, SessionStatus.IDLE, None)
             session.status = SessionStatus.IDLE
 
-            logger.info(f"Session {session_id} turn {turn_id} completed successfully")
+            logger.info(
+                f"Turn {turn_id} complete in {(time.time()-t_start)*1000:.0f}ms"
+            )
             return True
 
         except Exception as e:
             logger.error(f"Error processing session audio: {e}", exc_info=True)
-
             await connection_manager.broadcast_error(
-                session_id,
-                "PROCESSING_ERROR",
-                str(e),
-                turn_id
+                session_id, "PROCESSING_ERROR", str(e), turn_id
             )
-
             session.status = SessionStatus.ERROR
             return False
 
         finally:
-            # Always resume the proactive engine after the turn is done
             engine = session_manager.get_proactive_engine(session_id)
             if engine:
                 engine.resume()
 
-    async def _generate_audio_placeholder(
-        self,
-        session_id: str,
-        turn_id: str,
-        text: str
-    ) -> Optional[str]:
-        """
-        Generate audio file using TTS
-
-        Args:
-            session_id: Session ID
-            turn_id: Turn ID
-            text: Text to synthesize
-
-        Returns:
-            Path to audio file or None
-        """
-        try:
-            # Create session audio directory
-            audio_dir = os.path.join(settings.AUDIO_DIR, session_id)
-            os.makedirs(audio_dir, exist_ok=True)
-
-            audio_path = os.path.join(audio_dir, f"{turn_id}.wav")
-
-            # Create TTS processor based on configured engine (model cached globally)
-            tts = _create_tts_processor()
-
-            # Synthesize speech (run in thread pool as it's CPU-intensive)
-            success = await asyncio.to_thread(tts.synthesize, text, audio_path)
-
-            if success:
-                logger.info(f"Generated TTS audio: {audio_path}")
-                return audio_path
-            else:
-                logger.error("TTS synthesis failed")
-                return None
-
-        except Exception as e:
-            logger.error(f"Error generating TTS audio: {e}", exc_info=True)
-            return None
 
 
 # Global pipeline runner instance

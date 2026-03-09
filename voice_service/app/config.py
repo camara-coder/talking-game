@@ -137,6 +137,12 @@ class Settings(BaseSettings):
     LLM_MAX_TOKENS: int = 50
     # Fewer context turns = smaller prompt = faster inference on tiny models.
     LLM_CONTEXT_TURNS: int = 2  # Number of previous turns to keep
+    # Context window size.  Ollama defaults to 2048; 512 is more than enough
+    # for short cat conversations and cuts attention computation by ~4×.
+    LLM_NUM_CTX: int = 512
+    # Number of CPU threads for Ollama inference (0 = Ollama picks automatically).
+    # Set explicitly to match available CPU cores for best throughput.
+    LLM_NUM_THREAD: int = 0
 
     # Response Shaping Configuration
     MAX_RESPONSE_SENTENCES: int = 2
