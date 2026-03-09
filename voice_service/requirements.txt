@@ -28,6 +28,7 @@ nemo_toolkit[asr,tts] @ git+https://github.com/NVIDIA/NeMo.git
 # LLM Client
 requests>=2.32.0
 httpx>=0.28.0
+anthropic>=0.43.0  # Claude API — primary LLM (falls back to Ollama on error)
 
 # TTS - ElevenLabs (legacy)
 elevenlabs>=1.0.0
